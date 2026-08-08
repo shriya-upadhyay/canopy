@@ -1,1 +1,0 @@
-{"status":200,"id":"174012d6-4c43-4951-a074-43f7a678411a","asset":"ETH","direction":"up","confidence":0.91,"rationale":"proprietary orderflow edge (undisclosed)","horizonSec":180,"priceAtIssue":1919.565,"maxPrice":"$0.50","bond":{"amount":"$2.00","note":"seller staked, slashed if wrong"},"note":"settles in 180s, scaled by realized accuracy"}
