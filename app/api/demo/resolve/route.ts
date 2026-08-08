@@ -18,6 +18,8 @@ import { get, markSettled, markBondSettled } from "@/lib/pending";
 import { spot, accuracy as score } from "@/lib/prices";
 import { settleForAccuracy, initialized } from "@/lib/x402";
 import { resolveBond } from "@/lib/bond";
+import { SELLERS } from "@/lib/sellers";
+import { giveFeedback, agentId as erc8004AgentId } from "@/lib/erc8004";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +60,16 @@ export async function POST(req: NextRequest) {
       markBondSettled(id, bondSettled);
     }
 
+    // ERC-8004: buyer reviews the seller off the same accuracy score. Skipped
+    // (not failed) if the seller has no registered agent yet — see
+    // scripts/register-agents.mjs.
+    const seller = Object.values(SELLERS).find(
+      (s) => s.wallet.toLowerCase() === p.seller.toLowerCase()
+    );
+    const feedback = seller?.erc8004TokenId
+      ? await giveFeedback(erc8004AgentId(seller.erc8004TokenId), acc, p.asset)
+      : null;
+
     return Response.json({
       id,
       forced: forced !== null,
@@ -69,6 +81,7 @@ export async function POST(req: NextRequest) {
       onChain: Boolean(txHash),
       success: (res as { success?: boolean })?.success,
       bond: bondSettled ?? null,
+      feedback,
     });
   } catch (e) {
     return Response.json(
