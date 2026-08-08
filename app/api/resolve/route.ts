@@ -8,6 +8,8 @@ import { due, markSettled, markBondSettled, all } from "@/lib/pending";
 import { spot, accuracy as score } from "@/lib/prices";
 import { settleForAccuracy, initialized } from "@/lib/x402";
 import { resolveBond } from "@/lib/bond";
+import { SELLERS } from "@/lib/sellers";
+import { giveFeedback, agentId as erc8004AgentId } from "@/lib/erc8004";
 
 export async function POST() {
   await initialized();
@@ -37,6 +39,16 @@ export async function POST() {
       markBondSettled(p.id, bondSettled);
     }
 
+    // ERC-8004: buyer reviews the seller off the same accuracy score. Skipped
+    // (not failed) if the seller has no registered agent yet — see
+    // scripts/register-agents.mjs.
+    const seller = Object.values(SELLERS).find(
+      (s) => s.wallet.toLowerCase() === p.seller.toLowerCase()
+    );
+    const feedback = seller?.erc8004TokenId
+      ? await giveFeedback(erc8004AgentId(seller.erc8004TokenId), acc, p.asset)
+      : null;
+
     results.push({
       id: p.id,
       asset: p.asset,
@@ -47,11 +59,8 @@ export async function POST() {
       // acc === 0 -> no txHash, because nothing settled on-chain. The demo.
       onChain: Boolean(txHash),
       bond: bondSettled ?? null,
+      feedback,
     });
-
-    // TODO: ERC-8004 reputation feedback via agent0 SDK.
-    // Reputation registry 0x8004BAa17C55a88189AE136b182e5fdA19dE9b63
-    // value = acc, tags ["directional", p.asset]
   }
 
   return Response.json({ settled: results.length, results });

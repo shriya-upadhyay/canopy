@@ -22,6 +22,7 @@ export const SELLERS: Record<string, Seller> = {
     wallet: (process.env.SELLER_A_ADDR ?? "0x0") as `0x${string}`,
     maxPrice: "$0.50",
     skill: 0.85,
+    erc8004TokenId: "1806",
   },
   "seller-b": {
     id: "seller-b",
@@ -30,6 +31,7 @@ export const SELLERS: Record<string, Seller> = {
     wallet: (process.env.SELLER_B_ADDR ?? "0x0") as `0x${string}`,
     maxPrice: "$0.50",
     skill: 0.2,
+    erc8004TokenId: "1807",
   },
 };
 
