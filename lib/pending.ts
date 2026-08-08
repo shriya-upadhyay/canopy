@@ -27,6 +27,18 @@ export type Pending = {
     txHash?: string;      // absent when accuracy === 0 -> no on-chain tx
     at: number;
   };
+  /** Seller's skin-in-the-game, posted at listing time. See lib/bond.ts. */
+  bond?: {
+    payload: unknown;
+    requirements: unknown;
+    amount: string;       // e.g. "$2.00"
+  };
+  bondSettled?: {
+    slashed: boolean;     // true -> seller paid the buyer; false -> released
+    amountPct: string;
+    txHash?: string;      // absent when released -> no on-chain tx
+    at: number;
+  };
 };
 
 const store = new Map<string, Pending>();
@@ -44,4 +56,9 @@ export const due = () =>
 export const markSettled = (id: string, s: Pending["settled"]) => {
   const p = store.get(id);
   if (p) p.settled = s;
+};
+
+export const markBondSettled = (id: string, s: Pending["bondSettled"]) => {
+  const p = store.get(id);
+  if (p) p.bondSettled = s;
 };

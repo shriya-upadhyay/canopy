@@ -16,6 +16,7 @@ import type { NextRequest } from "next/server";
 import { server, signalRoute, initialized } from "@/lib/x402";
 import { put } from "@/lib/pending";
 import { spot } from "@/lib/prices";
+import { createBond, DEFAULT_BOND } from "@/lib/bond";
 import { randomUUID } from "node:crypto";
 
 const MAX_PRICE = "$0.50";
@@ -25,8 +26,18 @@ const HORIZON_SEC = 180; // short — must resolve twice inside a 4-min demo
 // one settles at $0 repeatedly. `?seller=b` selects the bad one; the default
 // is unchanged, so existing callers keep working.
 const AGENTS = {
-  a: { addr: process.env.SELLER_A_ADDR!, name: "Meridian Alpha", skill: 0.85 },
-  b: { addr: process.env.SELLER_B_ADDR!, name: "Kestrel Signals", skill: 0.2 },
+  a: {
+    addr: process.env.SELLER_A_ADDR!,
+    pk: process.env.SELLER_A_PK as `0x${string}` | undefined,
+    name: "Meridian Alpha",
+    skill: 0.85,
+  },
+  b: {
+    addr: process.env.SELLER_B_ADDR!,
+    pk: process.env.SELLER_B_PK as `0x${string}` | undefined,
+    name: "Kestrel Signals",
+    skill: 0.2,
+  },
 } as const;
 
 export async function GET(request: NextRequest) {
@@ -85,7 +96,26 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // --- 3. serve now, settle later ------------------------------------------
+  // --- 3. seller posts its bond ---------------------------------------------
+  // Skin in the game: a reverse-direction `upto` authorization payable to the
+  // buyer. Wrong signal -> slashed at resolution. See lib/bond.ts. Best-effort:
+  // a bond failure (e.g. seller wallet unfunded) shouldn't break signal
+  // delivery, it just means this listing has no stake behind it.
+  const buyerAddr = process.env.BUYER_ADDR;
+  let bond: { payload: unknown; requirements: unknown; amount: string } | undefined;
+  if (agent.pk && buyerAddr) {
+    try {
+      const { payload: bondPayload, requirements: bondReqs } = await createBond(
+        agent.pk,
+        buyerAddr
+      );
+      bond = { payload: bondPayload, requirements: bondReqs, amount: DEFAULT_BOND };
+    } catch (e) {
+      console.error("bond post failed, listing without stake:", e);
+    }
+  }
+
+  // --- 4. serve now, settle later ------------------------------------------
   const asset = "ETH";
   const priceAtIssue = await spot(asset);
   const direction = Math.random() > 0.35 ? "up" : "down"; // TODO: real strategy
@@ -103,6 +133,7 @@ export async function GET(request: NextRequest) {
     horizonSec: HORIZON_SEC,
     priceAtIssue,
     issuedAt: Date.now(),
+    bond,
   });
 
   return Response.json({
@@ -113,6 +144,7 @@ export async function GET(request: NextRequest) {
     horizonSec: HORIZON_SEC,
     priceAtIssue,
     maxPrice: MAX_PRICE,
+    bond: bond ? { amount: bond.amount, note: "seller staked, slashed if wrong" } : null,
     note: `settles in ${HORIZON_SEC}s, scaled by realized accuracy`,
   });
 }

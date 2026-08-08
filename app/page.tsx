@@ -19,6 +19,7 @@ type Signal = {
   txHash: string | null;
   txUrl: string | null;
   onChain: boolean;
+  bond: { amount: string; status: "posted" | "slashed" | "released"; txHash: string | null; txUrl: string | null } | null;
 };
 
 type Credit = {
@@ -234,6 +235,36 @@ export default function Dashboard() {
                       {s.status === "zero" && (
                         <div className="text-xs text-red-400 mt-0.5 font-medium">
                           no on-chain transaction — nobody had to arbitrate this
+                        </div>
+                      )}
+                      {s.bond && (
+                        <div
+                          className={`text-xs mt-0.5 ${
+                            s.bond.status === "slashed"
+                              ? "text-red-400 font-medium"
+                              : "text-neutral-500"
+                          }`}
+                        >
+                          bond {s.bond.amount}{" "}
+                          {s.bond.status === "posted"
+                            ? "staked"
+                            : s.bond.status === "slashed"
+                              ? "— slashed, paid to buyer"
+                              : "— released"}
+                          {s.bond.txUrl && (
+                            <>
+                              {" "}
+                              ·{" "}
+                              <a
+                                href={s.bond.txUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sky-400 hover:underline"
+                              >
+                                tx ↗
+                              </a>
+                            </>
+                          )}
                         </div>
                       )}
                       {s.txUrl && (

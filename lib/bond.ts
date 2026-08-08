@@ -16,7 +16,11 @@
 // "what stops someone listing garbage?" a mechanism instead of a hand-wave.
 
 import { server, initialized } from "./x402";
-import { MONAD, USDC, USDC_DECIMALS } from "./const";
+import { MONAD, USDC, USDC_DECIMALS, RPC } from "./const";
+import { monadTestnet } from "./chain";
+import { UptoEvmScheme as UptoBondClientScheme } from "@x402/evm/upto/client";
+import { privateKeyToAccount } from "viem/accounts";
+import { createWalletClient, http } from "viem";
 import type { ResourceConfig } from "@x402/core/server";
 
 /** Default bond a seller must post to list a signal. */
@@ -97,3 +101,41 @@ export const bondAtomic = (bond = DEFAULT_BOND) =>
   BigInt(Math.round(Number(bond.replace("$", "")) * 10 ** USDC_DECIMALS));
 
 export const BOND_ASSET = USDC;
+
+/**
+ * Same wallet-client-plus-signTypedData-override shape used for the buyer in
+ * app/api/buy: the `upto` scheme signs an EIP-712 Permit2 witness with the
+ * raw account, not the wallet client.
+ */
+function signerFor(pk: `0x${string}`) {
+  const account = privateKeyToAccount(pk);
+  const wallet = createWalletClient({ account, chain: monadTestnet, transport: http(RPC) });
+  return {
+    ...wallet,
+    address: account.address,
+    signTypedData: (a: Parameters<typeof account.signTypedData>[0]) =>
+      account.signTypedData(a),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any;
+}
+
+/**
+ * Seller signs its bond at listing time — the reverse-direction `upto`
+ * authorization payable to the buyer. Mirrors scripts/prove-bond.mjs's
+ * `authorize()`: build requirements, then sign a payload directly against
+ * the scheme (no HTTP round-trip — the seller isn't responding to a 402,
+ * it's posting a stake alongside the signal it's about to serve).
+ */
+export async function createBond(
+  sellerPk: `0x${string}`,
+  payToBuyer: string,
+  bond = DEFAULT_BOND,
+) {
+  const requirements = await buildBondRequirements(payToBuyer, bond);
+  const scheme = new UptoBondClientScheme(signerFor(sellerPk));
+  const payload = await scheme.createPaymentPayload(2, requirements);
+  return {
+    payload: { ...payload, scheme: "upto", network: MONAD },
+    requirements,
+  };
+}

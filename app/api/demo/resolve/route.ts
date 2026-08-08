@@ -14,9 +14,10 @@
 // rigged outcome presented as luck.
 
 import { NextRequest } from "next/server";
-import { get, markSettled } from "@/lib/pending";
+import { get, markSettled, markBondSettled } from "@/lib/pending";
 import { spot, accuracy as score } from "@/lib/prices";
 import { settleForAccuracy, initialized } from "@/lib/x402";
+import { resolveBond } from "@/lib/bond";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,14 @@ export async function POST(req: NextRequest) {
     };
     markSettled(id, settled);
 
+    // Same accuracy score slashes or releases the seller's bond, if one was posted.
+    let bondSettled;
+    if (p.bond) {
+      const b = await resolveBond(p.bond.payload, p.bond.requirements, acc);
+      bondSettled = { slashed: b.slashed, amountPct: b.amountPct, txHash: b.txHash, at: Date.now() };
+      markBondSettled(id, bondSettled);
+    }
+
     return Response.json({
       id,
       forced: forced !== null,
@@ -59,6 +68,7 @@ export async function POST(req: NextRequest) {
       // acc === 0 -> no txHash, because nothing settled on-chain. The demo.
       onChain: Boolean(txHash),
       success: (res as { success?: boolean })?.success,
+      bond: bondSettled ?? null,
     });
   } catch (e) {
     return Response.json(
