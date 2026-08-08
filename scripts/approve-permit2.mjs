@@ -5,7 +5,7 @@
  *   412 PRECONDITION_FAILED / PERMIT2_ALLOWANCE_REQUIRED
  * ...in the middle of your demo.
  *
- * BUYERS need it to pay for signals.
+ * BUYERS need it to pay for strategies.
  * SELLERS need it too, because their bond is an upto authorization as well.
  *
  *   npm run approve              # buyer + both sellers

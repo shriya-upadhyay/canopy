@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Signal = {
+type Strategy = {
   id: string;
   seller: string;
   strategyName?: string;
@@ -53,7 +53,7 @@ type RainResult = {
 
 type Preferences = {
   assets: string[];
-  maxPerSignal: number;
+  maxPerStrategy: number;
   sessionBudget: number;
   minSellerHitRate: number;
   intervalSec: number;
@@ -86,7 +86,7 @@ const SELLERS = [
 ];
 
 export default function Dashboard() {
-  const [signals, setSignals] = useState<Signal[]>([]);
+  const [strategies, setSignals] = useState<Strategy[]>([]);
   const [credit, setCredit] = useState<Credit | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [rain, setRain] = useState<RainResult | null>(null);
@@ -101,7 +101,7 @@ export default function Dashboard() {
   const agentTimer = useRef<NodeJS.Timeout | null>(null);
   const prefsDirty = useRef(false);
   const resolvingDue = useRef(false);
-  const latestSignals = useRef<Signal[]>([]);
+  const latestSignals = useRef<Strategy[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -111,7 +111,7 @@ export default function Dashboard() {
       ]);
       const ledger = await ledgerRes.json();
       const agent = await agentRes.json();
-      const nextSignals = ledger.signals ?? [];
+      const nextSignals = ledger.strategies ?? [];
       latestSignals.current = nextSignals;
       setSignals(nextSignals);
       setCredit(ledger.credit ?? null);
@@ -123,7 +123,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  const autoResolveDue = useCallback(async (items: Signal[]) => {
+  const autoResolveDue = useCallback(async (items: Strategy[]) => {
     if (resolvingDue.current) return;
     const dueIds = items
       .filter((s) => s.status === "pending" && s.resolvesAt <= Date.now())
@@ -131,7 +131,7 @@ export default function Dashboard() {
     if (dueIds.length === 0) return;
 
     resolvingDue.current = true;
-    setLastAction(`resolving ${dueIds.length} due signal${dueIds.length === 1 ? "" : "s"}`);
+    setLastAction(`resolving ${dueIds.length} due strategy${dueIds.length === 1 ? "" : "s"}`);
     try {
       for (const id of dueIds) {
         const r = await fetch(`/api/demo/resolve?id=${encodeURIComponent(id)}`, {
@@ -204,7 +204,7 @@ export default function Dashboard() {
     setErr(null);
     try {
       const asset = prefs?.assets[0] ?? "ETH";
-      const max = prefs?.maxPerSignal ?? 0.5;
+      const max = prefs?.maxPerStrategy ?? 0.5;
       const r = await fetch(
         `/api/buy?seller=${seller}&asset=${encodeURIComponent(asset)}&max=${max.toFixed(2)}`,
         { method: "POST" },
@@ -279,7 +279,7 @@ export default function Dashboard() {
   }
 
   const rec = credit?.record;
-  const pending = signals.filter((s) => s.status === "pending");
+  const pending = strategies.filter((s) => s.status === "pending");
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 p-6 font-sans">
@@ -291,7 +291,7 @@ export default function Dashboard() {
           </h1>
           <p className="text-neutral-400 text-sm mt-1">
             Conditional settlement on Monad via x402 <code className="text-neutral-300">upto</code>.
-            A wrong signal settles at $0 — with no on-chain transaction.
+            A wrong strategy settles at $0 — with no on-chain transaction.
           </p>
         </header>
 
@@ -359,19 +359,19 @@ export default function Dashboard() {
               </div>
 
               <MandateSlider
-                label="Max per signal"
-                value={prefs.maxPerSignal}
+                label="Max per strategy"
+                value={prefs.maxPerStrategy}
                 min={0.1}
                 max={2}
                 step={0.1}
                 format={(v) => `$${v.toFixed(2)}`}
-                onChange={(maxPerSignal) => {
+                onChange={(maxPerStrategy) => {
                   prefsDirty.current = true;
-                  setPrefs({ ...prefs, maxPerSignal });
+                  setPrefs({ ...prefs, maxPerStrategy });
                 }}
               />
               <MandateSlider
-                label="Session budget"
+                label="Strategy budget (you set)"
                 value={prefs.sessionBudget}
                 min={0.5}
                 max={10}
@@ -436,7 +436,7 @@ export default function Dashboard() {
             accent="text-amber-400"
           />
           <Stat
-            label="Agent credit limit (earned)"
+            label="Card limit for outside data (earned)"
             value={`$${credit?.limitUsd ?? "5.00"}`}
             accent="text-sky-400"
           />
@@ -445,7 +445,7 @@ export default function Dashboard() {
         {/* ── sellers ────────────────────────────────────────────── */}
         <section className="grid md:grid-cols-2 gap-4">
           {SELLERS.map((s) => {
-            const mine = signals.filter((x) => x.seller === s.name && x.status !== "pending");
+            const mine = strategies.filter((x) => x.seller === s.name && x.status !== "pending");
             const paid = mine.filter((x) => (x.accuracy ?? 0) > 0);
             const earned = mine.reduce(
               (t, x) => t + (x.authorizedMaxUsd ?? 0.5) * (x.accuracy ?? 0),
@@ -463,7 +463,7 @@ export default function Dashboard() {
                     disabled={busy !== null}
                     className="shrink-0 bg-neutral-100 text-neutral-900 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white disabled:opacity-40"
                   >
-                    {busy === `buy-${s.key}` ? "signing…" : "Buy signal"}
+                    {busy === `buy-${s.key}` ? "signing…" : "Buy strategy"}
                   </button>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-4 text-sm">
@@ -547,13 +547,13 @@ export default function Dashboard() {
             </span>
           </div>
 
-          {signals.length === 0 ? (
+          {strategies.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-neutral-600">
-              No purchases yet. Buy a signal to start.
+              No purchases yet. Buy a strategy to start.
             </p>
           ) : (
             <ul className="divide-y divide-neutral-800">
-              {signals.map((s) => {
+              {strategies.map((s) => {
                 const left = Math.max(0, Math.ceil((s.resolvesAt - now) / 1000));
                 return (
                   <li key={s.id} className="px-5 py-3 flex items-center gap-4 text-sm">
@@ -796,7 +796,7 @@ function Mini({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Badge({ status }: { status: Signal["status"] }) {
+function Badge({ status }: { status: Strategy["status"] }) {
   const map = {
     pending: ["PENDING", "bg-neutral-800 text-neutral-400"],
     full: ["FULL", "bg-emerald-900 text-emerald-300"],

@@ -1,11 +1,11 @@
 // Resolve-now control for the stage.
 //
 // You cannot stand in front of judges for 180 seconds waiting on a horizon.
-// This settles a specific signal immediately.
+// This settles a specific strategy immediately.
 //
-//   POST /api/demo/resolve?id=<signalId>              -> score it against the
+//   POST /api/demo/resolve?id=<strategyId>              -> score it against the
 //                                                        real spot price now
-//   POST /api/demo/resolve?id=<signalId>&accuracy=0   -> force the $0 path
+//   POST /api/demo/resolve?id=<strategyId>&accuracy=0   -> force the $0 path
 //
 // The forced variant is not a fake market. It's a manual settlement trigger,
 // so you can demonstrate the zero-settlement path on demand instead of hoping
@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
     if (!id) return Response.json({ error: "id required" }, { status: 400 });
 
     const p = get(id);
-    if (!p) return Response.json({ error: "unknown signal" }, { status: 404 });
-    if (p.settled) return Response.json({ error: "already settled", signal: p }, { status: 409 });
+    if (!p) return Response.json({ error: "unknown strategy" }, { status: 404 });
+    if (p.settled) return Response.json({ error: "already settled", strategy: p }, { status: 409 });
 
     const forced = req.nextUrl.searchParams.get("accuracy");
     const priceNow = await spot(p.asset);

@@ -13,7 +13,8 @@
     "prove": "node --env-file=.env.local scripts/prove-upto.mjs",
     "prove:bond": "node --env-file=.env.local scripts/prove-bond.mjs",
     "rain:check": "node --env-file=.env.local scripts/rain-smoke.mjs",
-    "register:agents": "node --env-file=.env.local scripts/register-agents.mjs"
+    "register:agents": "node --env-file=.env.local scripts/register-agents.mjs",
+    "verify:agents": "node --env-file=.env.local scripts/verify-agents.mjs"
   },
   "dependencies": {
     "@x402/core": "^2.21.0",

@@ -12,7 +12,7 @@ The addition: **the card's limit is earned, not fixed.**
 ## The loop
 
 ```
-buyer pays for a signal   ──►  upto settles on OUTCOME (0% / partial / 100%)
+buyer pays for a strategy   ──►  upto settles on OUTCOME (0% / partial / 100%)
         │                              │
         │                              ▼
         │                      seller reputation (ERC-8004)
@@ -60,7 +60,7 @@ PAN decryption → an authorization that **succeeds** → an authorization that 
 | `GET /api/rain/provision` | Current earned credit decision, no card created |
 | `POST /api/rain/provision` | Issues a scoped card sized to the earned limit |
 | `POST /api/rain/purchase` | Agent buys external data; authorize → settle |
-| `GET /api/ledger` | Everything: signals, settlements, credit state |
+| `GET /api/ledger` | Everything: strategies, settlements, credit state |
 
 `POST /api/rain/purchase` body:
 
@@ -78,7 +78,7 @@ Pass `"declineReason": "blocked_mcc"` to force the guardrail to fire on stage.
 | Knob | Value |
 |---|---|
 | Base allowance | $5.00 |
-| Earned per signal that paid off | $2.50, weighted by hit rate |
+| Earned per strategy that paid off | $2.50, weighted by hit rate |
 | Hard ceiling (human-set) | $50.00 |
 
 Rain applies a **1.2× ceiling** over `amountInUSDCents` to absorb auth holds —
@@ -127,7 +127,7 @@ Fixed for the hackathon. Don't burn cards in testing — you get 10 a day.
 1. Show the policy: $5.00 cap, MCC allowlist, expires in 24h. A human set this.
 2. Agent buys external data at an allowed merchant. **Authorized. Settled.**
 3. Agent tries a merchant off the allowlist. **Declined before money moved.**
-4. Resolve two good signals. Re-provision. **The limit went up — it earned it.**
+4. Resolve two good strategies. Re-provision. **The limit went up — it earned it.**
 
 > "The agent didn't ask permission. It operated inside a budget it earned,
 > and Rain enforced the edge of that budget without a human in the loop."

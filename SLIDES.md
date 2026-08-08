@@ -9,8 +9,8 @@ Raingentic Commerce Hackathon NYC · Rain × Monad × Encode
 ## The one-liner
 
 > Conditional settlement for agent commerce. A buyer agent authorizes a
-> **maximum**; the seller is paid only to the extent its signal was actually
-> right. A wrong signal settles at **$0 with no on-chain transaction** — no
+> **maximum**; the seller is paid only to the extent its strategy was actually
+> right. A wrong strategy settles at **$0 with no on-chain transaction** — no
 > escrow, no arbitration, nobody to appeal to.
 >
 > The market for alpha is the demo. **Conditional settlement is the primitive.**
@@ -34,9 +34,9 @@ for actual ≤ ceiling.
 
 | Outcome | Settles | On-chain? |
 |---|---|---|
-| Signal right | 100% → $0.50 | yes, tx hash |
+| Strategy right | 100% → $0.50 | yes, tx hash |
 | Partially right | 40% → $0.20 | yes, tx hash |
-| **Signal wrong** | **0% → $0.00** | **no transaction at all** |
+| **Strategy wrong** | **0% → $0.00** | **no transaction at all** |
 
 That third row is the whole pitch. Not a refund, not a dispute, not an escrow
 release — **the payment simply never happens.** The buyer signed an off-chain
@@ -50,7 +50,7 @@ facilitator and prints explorer links.
 The stock `withX402` wrapper verifies and settles in a single request. Useless
 when the outcome is three minutes away. So we split them:
 
-1. **Verify** → serve the signal immediately (buyer gets value up front)
+1. **Verify** → serve the strategy immediately (buyer gets value up front)
 2. **Stash** `{payload, requirements}` in memory
 3. **Resolve** after the horizon → score against real spot price
 4. **Settle** with a percent override → `{ amount: "40%" }`
@@ -63,12 +63,12 @@ when the outcome is three minutes away. So we split them:
 
 Sellers sign a $2.00 authorization payable **to the buyer**:
 
-| Signal | Buyer's payment | Seller's bond |
+| Strategy | Buyer's payment | Seller's bond |
 |---|---|---|
 | **Wrong** | 0% → pays nothing, no tx | **100% → seller pays buyer $2.00** |
 | **Right** | 100% → seller earns $0.50 | 0% → released, no tx |
 
-A wrong signal doesn't merely fail to earn — **it costs the seller money, paid
+A wrong strategy doesn't merely fail to earn — **it costs the seller money, paid
 to the counterparty it misled.** Same scheme, same facilitator, zero new
 contracts, zero arbitration.
 
@@ -86,7 +86,7 @@ moving in both directions.
 
 | | Intelligent | Random |
 |---|---|---|
-| Signal | Real 5-min momentum (Coinbase 1-min candles) | Coin flip |
+| Strategy | Real 5-min momentum (Coinbase 1-min candles) | Coin flip |
 | Confidence | **Calibrated** — scales with trend strength | **Always 0.85–0.95** |
 | Rationale shown | `5m momentum -1.77bps → continuation` | `proprietary orderflow edge (undisclosed)` |
 
@@ -107,7 +107,7 @@ Rain answers *how much is this agent allowed to spend at all.*
 
 ```
 settlement history → credit decision → Rain scoped card limit
-   $5.00 base + $2.50 per signal that paid off, capped at $50 (human-set)
+   $5.00 base + $2.50 per strategy that paid off, capped at $50 (human-set)
 ```
 
 Rain enforces the cap, the MCC allowlist, and the expiry **at authorization,
@@ -116,7 +116,7 @@ before money moves.**
 - Agent buys external data at an allowed merchant → **authorized, settled**
 - Agent tries a merchant off the allowlist → **declined**,
   `scoped_card_mcc_not_allowed`, a real policy decline
-- Two good signals later → **the limit goes up, because it earned it**
+- Two good strategies later → **the limit goes up, because it earned it**
 
 **This is a credit limit for an autonomous agent, set by its own track record.**
 
@@ -176,7 +176,7 @@ The Validation Registry isn't deployed anywhere yet.
   *prevented*. The real fix is validator attestation (ERC-8004 Validation
   Registry, undeployed).
 - **No execution.** Paper positions only. We deliberately don't claim the
-  signals make money.
+  strategies make money.
 
 ---
 
@@ -196,7 +196,7 @@ Yes, in v1 — and the rule is deterministic over public data, so anyone can
 recompute any settlement and catch a lie. Validator attestation is the fix.
 
 **"What stops someone reselling what they bought?"**
-Short signal half-life makes a resold 3-minute signal worthless, and a reseller
+Short strategy half-life makes a resold 3-minute strategy worthless, and a reseller
 carries no bond, so no credibility. We haven't built enforcement.
 
 **"Why Monad?"**
@@ -233,5 +233,5 @@ the fact.
 - Rain scoped cards are **canceled at authorization** — strictly single-use
 - Rain's settle endpoint **requires `amount`**; the quickstart's `{}` is a 400
 - Never resolve off a cached price — identical prices score 0 bps, which fails
-  both `> 0` and `< 0`, marking every signal wrong and slashing every bond
+  both `> 0` and `< 0`, marking every strategy wrong and slashing every bond
 - ERC-8004 registries are **mainnet only**, despite unlabelled docs

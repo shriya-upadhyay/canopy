@@ -48,7 +48,7 @@ export async function PUT(req: NextRequest) {
     updated.running
       ? "Mandate accepted — operating autonomously"
       : "Paused by operator",
-    `Assets ${updated.assets.join(", ")} · max $${updated.maxPerSignal.toFixed(2)}/signal · ` +
+    `Assets ${updated.assets.join(", ")} · max $${updated.maxPerStrategy.toFixed(2)}/strategy · ` +
       `session budget $${updated.sessionBudget.toFixed(2)} · ` +
       `min seller hit rate ${(updated.minSellerHitRate * 100).toFixed(0)}% · ` +
       `cycle ${updated.intervalSec}s`,
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       say("decide", `Chose ${d.seller === "a" ? "Intelligent" : "Random"}`, d.reason);
 
       const r = await fetch(
-        `${origin}/api/buy?seller=${d.seller}&asset=${encodeURIComponent(asset)}&max=${p.maxPerSignal.toFixed(2)}`,
+        `${origin}/api/buy?seller=${d.seller}&asset=${encodeURIComponent(asset)}&max=${p.maxPerStrategy.toFixed(2)}`,
         { method: "POST" },
       );
       const j = await r.json();
@@ -81,10 +81,10 @@ export async function POST(req: NextRequest) {
         return Response.json({ action: "buy", error: j.error });
       }
 
-      noteSpend(p.maxPerSignal);
+      noteSpend(p.maxPerStrategy);
       say(
         "buy",
-        `Bought ${j.asset} ${String(j.direction).toUpperCase()} — authorized up to $${p.maxPerSignal.toFixed(2)}`,
+        `Bought ${j.asset} ${String(j.direction).toUpperCase()} — authorized up to $${p.maxPerStrategy.toFixed(2)}`,
         `${j.rationale ?? ""} · conviction ${(j.confidence * 100).toFixed(0)}% · ` +
           `resolves in ${j.horizonSec}s. Nothing has moved yet — settlement is scored on the outcome.`,
       );
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       // The agent is not only a buyer. Each cycle it also forms a view from
       // market data and, when conviction clears the bar, lists its own strategy.
       await generateListing(asset);
-      return Response.json({ action: "buy", signal: j });
+      return Response.json({ action: "buy", strategy: j });
     }
 
     // ── PROCURE (Rain boundary) ────────────────────────────────────────────

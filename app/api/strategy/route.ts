@@ -1,19 +1,19 @@
-// Seller endpoint. Verifies payment, serves the signal IMMEDIATELY,
+// Seller endpoint. Verifies payment, serves the strategy IMMEDIATELY,
 // stashes the payload, and settles later once the resolver scores it.
 //
 //   1. no PAYMENT-SIGNATURE -> 402 + requirements
-//   2. with signature       -> verifyPayment -> serve signal -> stash
+//   2. with signature       -> verifyPayment -> serve strategy -> stash
 //   3. (later) /api/resolve -> settlePayment with a % override
 //
 // Deliberately NOT using withX402: that wrapper settles inline, which
-// defeats the whole point when the signal resolves 3 minutes later.
+// defeats the whole point when the strategy resolves 3 minutes later.
 // See lib/pending.ts.
 //
 // Next 16: route handlers use the Web Request/Response API and are
 // uncached by default. Reading headers makes this dynamic anyway.
 
 import type { NextRequest } from "next/server";
-import { server, signalRoute, initialized } from "@/lib/x402";
+import { server, strategyRoute, initialized } from "@/lib/x402";
 import { put } from "@/lib/pending";
 import { spot } from "@/lib/prices";
 import { decide } from "@/lib/strategy";
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
   await initialized(); // fetches facilitator /supported — required, see lib/x402.ts
 
   const requirements = await server.buildPaymentRequirements(
-    signalRoute(SELLER, maxPrice.label)
+    strategyRoute(SELLER, maxPrice.label)
   );
 
   if (requirements.length === 0) {
@@ -112,8 +112,8 @@ export async function GET(request: NextRequest) {
 
   // --- 3. seller posts its bond ---------------------------------------------
   // Skin in the game: a reverse-direction `upto` authorization payable to the
-  // buyer. Wrong signal -> slashed at resolution. See lib/bond.ts. Best-effort:
-  // a bond failure (e.g. seller wallet unfunded) shouldn't break signal
+  // buyer. Wrong strategy -> slashed at resolution. See lib/bond.ts. Best-effort:
+  // a bond failure (e.g. seller wallet unfunded) shouldn't break strategy
   // delivery, it just means this listing has no stake behind it.
   const buyerAddr = process.env.BUYER_ADDR;
   let bond: { payload: unknown; requirements: unknown; amount: string } | undefined;
