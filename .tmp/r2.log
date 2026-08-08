@@ -1,0 +1,23 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3151
+- Network:       http://172.16.10.3:3151
+- Environments: .env.local
+✓ Ready in 830ms
+✓ Running next.config.ts took 108ms
+
+ PUT /api/agent 200 in 289ms (next.js: 263ms, application-code: 26ms)
+ GET /api/signal?seller=a 402 in 142ms (next.js: 62ms, application-code: 79ms)
+ GET /api/signal?seller=a 200 in 302ms (next.js: 3ms, application-code: 299ms)
+ POST /api/buy?seller=a 200 in 616ms (next.js: 69ms, application-code: 547ms)
+ POST /api/agent 200 in 630ms (next.js: 3ms, application-code: 628ms)
+ GET /api/signal?seller=a 402 in 7ms (next.js: 2ms, application-code: 5ms)
+ GET /api/signal?seller=a 200 in 79ms (next.js: 3ms, application-code: 76ms)
+ POST /api/buy?seller=a 200 in 108ms (next.js: 3ms, application-code: 105ms)
+ POST /api/agent 200 in 127ms (next.js: 5ms, application-code: 121ms)
+ GET /api/signal?seller=a 402 in 7ms (next.js: 2ms, application-code: 4ms)
+ GET /api/signal?seller=a 200 in 82ms (next.js: 2ms, application-code: 80ms)
+ POST /api/buy?seller=a 200 in 103ms (next.js: 2ms, application-code: 101ms)
+ POST /api/agent 200 in 117ms (next.js: 5ms, application-code: 112ms)
+ POST /api/agent 200 in 12ms (next.js: 5ms, application-code: 7ms)
+ POST /api/agent 200 in 14ms (next.js: 9ms, application-code: 5ms)
+ GET /api/agent 200 in 12ms (next.js: 5ms, application-code: 7ms)

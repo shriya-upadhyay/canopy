@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Signal = {
   id: string;
   seller: string;
+  strategyName?: string;
   asset: string;
   direction: "up" | "down";
   confidence: number;
@@ -14,6 +15,7 @@ type Signal = {
   status: "pending" | "zero" | "partial" | "full";
   accuracy?: number;
   authorizedMax: string;
+  authorizedMaxUsd?: number;
   settled: string | null;
   pct: string | null;
   txHash: string | null;
@@ -49,9 +51,38 @@ type RainResult = {
   error?: string;
 };
 
+type Preferences = {
+  assets: string[];
+  maxPerSignal: number;
+  sessionBudget: number;
+  minSellerHitRate: number;
+  intervalSec: number;
+  running: boolean;
+};
+
+type AgentLog = {
+  id: string;
+  at: number;
+  act: "observe" | "decide" | "buy" | "skip" | "settle" | "procure" | "list" | "halt";
+  text: string;
+  detail?: string;
+};
+
+type AgentListing = {
+  id: string;
+  asset: string;
+  direction: "up" | "down";
+  confidence: number;
+  rationale: string;
+  askUsd: number;
+  bondUsd: number;
+  createdAt: number;
+  status: "draft" | "listed";
+};
+
 const SELLERS = [
-  { key: "a", name: "Meridian Alpha", blurb: "Short-horizon momentum on majors. Sells capacity it can't deploy." },
-  { key: "b", name: "Kestrel Signals", blurb: "Claims a proprietary orderflow edge. The record disagrees." },
+  { key: "a", name: "Intelligent", blurb: "Short-horizon momentum on majors. Sells capacity it can't deploy." },
+  { key: "b", name: "Random", blurb: "Claims a proprietary orderflow edge. The record disagrees." },
 ];
 
 export default function Dashboard() {
@@ -60,36 +91,124 @@ export default function Dashboard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [rain, setRain] = useState<RainResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
+  const [prefs, setPrefs] = useState<Preferences | null>(null);
+  const [agentLog, setAgentLog] = useState<AgentLog[]>([]);
+  const [agentListings, setAgentListings] = useState<AgentListing[]>([]);
+  const [lastAction, setLastAction] = useState<string | null>(null);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const timer = useRef<NodeJS.Timeout | null>(null);
+  const agentTimer = useRef<NodeJS.Timeout | null>(null);
+  const prefsDirty = useRef(false);
+  const resolvingDue = useRef(false);
+  const latestSignals = useRef<Signal[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/ledger", { cache: "no-store" });
-      const j = await r.json();
-      setSignals(j.signals ?? []);
-      setCredit(j.credit ?? null);
+      const [ledgerRes, agentRes] = await Promise.all([
+        fetch("/api/ledger", { cache: "no-store" }),
+        fetch("/api/agent", { cache: "no-store" }),
+      ]);
+      const ledger = await ledgerRes.json();
+      const agent = await agentRes.json();
+      const nextSignals = ledger.signals ?? [];
+      latestSignals.current = nextSignals;
+      setSignals(nextSignals);
+      setCredit(ledger.credit ?? null);
+      if (!prefsDirty.current) setPrefs(agent.prefs ?? null);
+      setAgentLog(agent.log ?? []);
+      setAgentListings(agent.listings ?? []);
     } catch {
       /* keep last good state */
     }
   }, []);
 
+  const autoResolveDue = useCallback(async (items: Signal[]) => {
+    if (resolvingDue.current) return;
+    const dueIds = items
+      .filter((s) => s.status === "pending" && s.resolvesAt <= Date.now())
+      .map((s) => s.id);
+    if (dueIds.length === 0) return;
+
+    resolvingDue.current = true;
+    setLastAction(`resolving ${dueIds.length} due signal${dueIds.length === 1 ? "" : "s"}`);
+    try {
+      for (const id of dueIds) {
+        const r = await fetch(`/api/demo/resolve?id=${encodeURIComponent(id)}`, {
+          method: "POST",
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok && j.error !== "already settled") {
+          throw new Error(j.error ?? `resolve failed for ${id}`);
+        }
+      }
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? `Auto-resolve failed: ${e.message}` : String(e));
+    } finally {
+      resolvingDue.current = false;
+    }
+  }, [load]);
+
   useEffect(() => {
-    load();
-    timer.current = setInterval(() => {
+    const firstLoad = setTimeout(() => {
       load();
-      setNow(Date.now());
+    }, 0);
+    timer.current = setInterval(() => {
+      const tick = Date.now();
+      setNow(tick);
+      const currentSignals = latestSignals.current;
+      const due = currentSignals.some((s) => s.status === "pending" && s.resolvesAt <= tick);
+      if (due) {
+        autoResolveDue(currentSignals);
+      } else {
+        load();
+      }
     }, 2000);
     return () => {
+      clearTimeout(firstLoad);
       if (timer.current) clearInterval(timer.current);
     };
+  }, [autoResolveDue, load]);
+
+  const runAgentCycle = useCallback(async () => {
+    setAgentBusy(true);
+    try {
+      const r = await fetch("/api/agent", { method: "POST" });
+      const j = await r.json();
+      setLastAction(j.action ?? j.skipped ?? j.error ?? "cycle");
+      if (j.error) setErr(j.error);
+      await load();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setAgentBusy(false);
+    }
   }, [load]);
+
+  useEffect(() => {
+    if (agentTimer.current) clearInterval(agentTimer.current);
+    if (!prefs?.running) return;
+
+    agentTimer.current = setInterval(() => {
+      runAgentCycle();
+    }, Math.max(5, prefs.intervalSec) * 1000);
+
+    return () => {
+      if (agentTimer.current) clearInterval(agentTimer.current);
+    };
+  }, [prefs?.running, prefs?.intervalSec, runAgentCycle]);
 
   async function buy(seller: string) {
     setBusy(`buy-${seller}`);
     setErr(null);
     try {
-      const r = await fetch(`/api/buy?seller=${seller}`, { method: "POST" });
+      const asset = prefs?.assets[0] ?? "ETH";
+      const max = prefs?.maxPerSignal ?? 0.5;
+      const r = await fetch(
+        `/api/buy?seller=${seller}&asset=${encodeURIComponent(asset)}&max=${max.toFixed(2)}`,
+        { method: "POST" },
+      );
       const j = await r.json();
       if (j.error) setErr(j.hint ? `${j.error} — ${j.hint}` : j.error);
     } catch (e) {
@@ -102,9 +221,12 @@ export default function Dashboard() {
 
   async function resolve(id: string, force?: number) {
     setBusy(`res-${id}`);
+    setErr(null);
     try {
       const q = force !== undefined ? `&accuracy=${force}` : "";
-      await fetch(`/api/demo/resolve?id=${id}${q}`, { method: "POST" });
+      const r = await fetch(`/api/demo/resolve?id=${encodeURIComponent(id)}${q}`, { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) setErr(j.error ?? "Resolve failed");
     } finally {
       setBusy(null);
       load();
@@ -125,6 +247,35 @@ export default function Dashboard() {
       setBusy(null);
       load();
     }
+  }
+
+  async function saveMandate(next = prefs) {
+    if (!next) return;
+    setBusy("mandate");
+    try {
+      const r = await fetch("/api/agent", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const j = await r.json();
+      prefsDirty.current = false;
+      setPrefs(j.prefs ?? next);
+      if (next.running && !prefs?.running) {
+        await runAgentCycle();
+      }
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function chooseAsset(asset: string) {
+    if (!prefs) return;
+    const next = { ...prefs, assets: [asset] };
+    prefsDirty.current = true;
+    setPrefs(next);
+    await saveMandate(next);
   }
 
   const rec = credit?.record;
@@ -150,6 +301,131 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ── mandate ───────────────────────────────────────────── */}
+        {prefs && (
+          <section className="bg-neutral-900 border border-emerald-900/70 rounded-xl p-5">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="font-semibold text-sm">My Agent Mandate</h2>
+                <p className="text-xs text-neutral-500 mt-1 max-w-2xl leading-relaxed">
+                  The human sets these preferences once. After that, the agent buys,
+                  waits, procures external data, and lists strategies inside this mandate.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => saveMandate({ ...prefs, running: !prefs.running })}
+                  disabled={busy !== null || agentBusy}
+                  className={`text-sm px-3 py-1.5 rounded-lg disabled:opacity-40 ${
+                    prefs.running
+                      ? "border border-amber-800 text-amber-300 hover:bg-amber-950"
+                      : "bg-emerald-600 text-white hover:bg-emerald-500"
+                  }`}
+                >
+                  {agentBusy ? "Thinking…" : prefs.running ? "Pause agent" : "Start agent"}
+                </button>
+                <button
+                  onClick={() => saveMandate()}
+                  disabled={busy !== null}
+                  className="bg-neutral-100 text-neutral-900 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white disabled:opacity-40"
+                >
+                  {busy === "mandate" ? "saving…" : "Save mandate"}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-5 gap-3 mt-4">
+              <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3">
+                <label className="text-[10px] uppercase text-neutral-600">Market focus</label>
+                <div className="flex gap-2 mt-2">
+                  {["ETH", "BTC", "SOL"].map((asset) => {
+                    const checked = prefs.assets[0] === asset;
+                    return (
+                      <button
+                        key={asset}
+                        onClick={() => chooseAsset(asset)}
+                        disabled={busy !== null}
+                        className={`text-xs px-2 py-1 rounded border ${
+                          checked
+                            ? "border-emerald-700 bg-emerald-950 text-emerald-300"
+                            : "border-neutral-800 text-neutral-500"
+                        }`}
+                      >
+                        {asset}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <MandateSlider
+                label="Max per signal"
+                value={prefs.maxPerSignal}
+                min={0.1}
+                max={2}
+                step={0.1}
+                format={(v) => `$${v.toFixed(2)}`}
+                onChange={(maxPerSignal) => {
+                  prefsDirty.current = true;
+                  setPrefs({ ...prefs, maxPerSignal });
+                }}
+              />
+              <MandateSlider
+                label="Session budget"
+                value={prefs.sessionBudget}
+                min={0.5}
+                max={10}
+                step={0.5}
+                format={(v) => `$${v.toFixed(2)}`}
+                onChange={(sessionBudget) => {
+                  prefsDirty.current = true;
+                  setPrefs({ ...prefs, sessionBudget });
+                }}
+              />
+              <MandateSlider
+                label="Min hit rate"
+                value={prefs.minSellerHitRate}
+                min={0}
+                max={1}
+                step={0.05}
+                format={(v) => `${Math.round(v * 100)}%`}
+                onChange={(minSellerHitRate) => {
+                  prefsDirty.current = true;
+                  setPrefs({ ...prefs, minSellerHitRate });
+                }}
+              />
+              <MandateSlider
+                label="Cycle"
+                value={prefs.intervalSec}
+                min={5}
+                max={60}
+                step={5}
+                format={(v) => `${v}s`}
+                onChange={(intervalSec) => {
+                  prefsDirty.current = true;
+                  setPrefs({ ...prefs, intervalSec });
+                }}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-neutral-800 pt-3 text-xs text-neutral-500">
+              <span>
+                Status:{" "}
+                <span className={prefs.running ? "text-emerald-300" : "text-neutral-300"}>
+                  {prefs.running ? "running" : "paused"}
+                </span>
+                {lastAction && <> · last cycle: {lastAction}</>}
+              </span>
+              <button
+                onClick={runAgentCycle}
+                disabled={busy !== null || agentBusy}
+                className="border border-neutral-700 text-neutral-300 px-2 py-1 rounded hover:bg-neutral-800 disabled:opacity-40"
+              >
+                {agentBusy ? "running cycle…" : "Run one cycle"}
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* ── money strip ────────────────────────────────────────── */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Stat label="Authorized (ceilings)" value={`$${(rec?.authorizedUsd ?? 0).toFixed(2)}`} />
@@ -171,7 +447,10 @@ export default function Dashboard() {
           {SELLERS.map((s) => {
             const mine = signals.filter((x) => x.seller === s.name && x.status !== "pending");
             const paid = mine.filter((x) => (x.accuracy ?? 0) > 0);
-            const earned = mine.reduce((t, x) => t + 0.5 * (x.accuracy ?? 0), 0);
+            const earned = mine.reduce(
+              (t, x) => t + (x.authorizedMaxUsd ?? 0.5) * (x.accuracy ?? 0),
+              0,
+            );
             return (
               <div key={s.key} className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
                 <div className="flex justify-between items-start gap-3">
@@ -200,6 +479,65 @@ export default function Dashboard() {
           })}
         </section>
 
+        {/* ── agent activity ─────────────────────────────────────── */}
+        <section className="grid lg:grid-cols-2 gap-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-neutral-800 flex justify-between items-center">
+              <h2 className="font-semibold text-sm">Agent Activity</h2>
+              <span className="text-xs text-neutral-500">{agentLog.length} events</span>
+            </div>
+            {agentLog.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-neutral-600">
+                Start the agent or run one cycle to see its decisions.
+              </p>
+            ) : (
+              <ul className="divide-y divide-neutral-800">
+                {agentLog.slice(0, 8).map((entry) => (
+                  <li key={entry.id} className="px-5 py-3 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="font-medium text-neutral-200">{entry.text}</span>
+                      <span className="text-[10px] uppercase text-neutral-600">{entry.act}</span>
+                    </div>
+                    {entry.detail && (
+                      <p className="text-xs text-neutral-500 mt-1 leading-relaxed">{entry.detail}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-neutral-800 flex justify-between items-center">
+              <h2 className="font-semibold text-sm">Strategies My Agent Listed</h2>
+              <span className="text-xs text-neutral-500">{agentListings.length} live</span>
+            </div>
+            {agentListings.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-neutral-600">
+                No sell-side strategy yet. The agent lists only when market-data conviction clears its bar.
+              </p>
+            ) : (
+              <ul className="divide-y divide-neutral-800">
+                {agentListings.slice(0, 6).map((listing) => (
+                  <li key={listing.id} className="px-5 py-3 text-sm flex justify-between gap-4">
+                    <div>
+                      <div className="font-medium">
+                        {listing.asset} {listing.direction === "up" ? "↑" : "↓"} · conf{" "}
+                        {listing.confidence}
+                      </div>
+                      <p className="text-xs text-neutral-500 mt-1">{listing.rationale}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-emerald-400 font-semibold">${listing.askUsd.toFixed(2)}</div>
+                      <div className="text-xs text-neutral-500">bond ${listing.bondUsd.toFixed(2)}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+
         {/* ── settlement feed ────────────────────────────────────── */}
         <section className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-neutral-800 flex justify-between items-center">
@@ -223,7 +561,7 @@ export default function Dashboard() {
 
                     <div className="flex-1 min-w-0">
                       <div className="truncate">
-                        <span className="text-neutral-300">{s.seller}</span>
+                        <span className="text-neutral-300">{s.strategyName ?? s.seller}</span>
                         <span className="text-neutral-600"> · </span>
                         <span className="font-medium">
                           {s.asset} {s.direction === "up" ? "↑" : "↓"}
@@ -409,6 +747,42 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3">
       <div className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
       <div className={`text-xl font-semibold mt-1 ${accent ?? ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function MandateSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  format,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3">
+      <div className="flex justify-between gap-2">
+        <label className="text-[10px] uppercase text-neutral-600">{label}</label>
+        <span className="text-xs text-neutral-300">{format(value)}</span>
+      </div>
+      <input
+        className="w-full mt-3 accent-emerald-500"
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
     </div>
   );
 }

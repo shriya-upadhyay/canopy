@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
     if (!pk) return Response.json({ error: "BUYER_PK missing" }, { status: 500 });
 
     const seller = req.nextUrl.searchParams.get("seller") ?? "a";
+    const asset = req.nextUrl.searchParams.get("asset") ?? "ETH";
+    const max = req.nextUrl.searchParams.get("max") ?? "0.5";
 
     const account = privateKeyToAccount(pk);
     const wallet = createWalletClient({
@@ -45,7 +47,9 @@ export async function POST(req: NextRequest) {
     const paidFetch = wrapFetchWithPayment(fetch, client);
 
     const origin = req.nextUrl.origin;
-    const res = await paidFetch(`${origin}/api/signal?seller=${seller}`);
+    const res = await paidFetch(
+      `${origin}/api/signal?seller=${seller}&asset=${encodeURIComponent(asset)}&max=${encodeURIComponent(max)}`
+    );
     const body = await res.json();
 
     return Response.json({ status: res.status, ...body });

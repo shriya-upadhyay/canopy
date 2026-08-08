@@ -6,16 +6,18 @@ import { creditLimit } from "@/lib/credit";
 import { txUrl } from "@/lib/const";
 
 const NAMES: Record<string, string> = {
-  [(process.env.SELLER_A_ADDR ?? "a").toLowerCase()]: "Meridian Alpha",
-  [(process.env.SELLER_B_ADDR ?? "b").toLowerCase()]: "Kestrel Signals",
+  [(process.env.SELLER_A_ADDR ?? "a").toLowerCase()]: "Intelligent",
+  [(process.env.SELLER_B_ADDR ?? "b").toLowerCase()]: "Random",
 };
 
 export async function GET() {
   const signals = all().map((p) => {
     const acc = p.settled?.accuracy;
+    const authorizedMaxUsd = p.authorizedMaxUsd ?? 0.5;
     return {
       id: p.id,
       seller: NAMES[p.seller?.toLowerCase()] ?? p.seller,
+      strategyName: p.strategyName ?? NAMES[p.seller?.toLowerCase()] ?? p.seller,
       sellerAddr: p.seller,
       asset: p.asset,
       direction: p.direction,
@@ -31,8 +33,9 @@ export async function GET() {
             : "partial"
         : "pending",
       accuracy: acc,
-      authorizedMax: "$0.50",
-      settled: p.settled ? `$${(0.5 * acc!).toFixed(4)}` : null,
+      authorizedMax: p.authorizedMax ?? `$${authorizedMaxUsd.toFixed(2)}`,
+      authorizedMaxUsd,
+      settled: p.settled ? `$${(authorizedMaxUsd * acc!).toFixed(4)}` : null,
       pct: p.settled?.amountPct ?? null,
       txHash: p.settled?.txHash ?? null,
       txUrl: p.settled?.txHash ? txUrl(p.settled.txHash) : null,

@@ -1,0 +1,12 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3135
+- Network:       http://172.16.10.3:3135
+- Environments: .env.local
+✓ Ready in 865ms
+✓ Running next.config.ts took 155ms
+⚠ Turbopack's filesystem cache has been deleted because we previously detected an internal error in Turbopack. Builds or page loads may be slower as a result.
+
+ GET /api/ledger 200 in 479ms (next.js: 459ms, application-code: 20ms)
+ GET /api/signal?seller=b 402 in 424ms (next.js: 239ms, application-code: 185ms)
+ GET /api/signal?seller=b 200 in 155ms (next.js: 3ms, application-code: 152ms)
+ POST /api/buy?seller=b 200 in 1538ms (next.js: 844ms, application-code: 694ms)

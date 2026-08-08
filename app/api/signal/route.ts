@@ -16,11 +16,13 @@ import type { NextRequest } from "next/server";
 import { server, signalRoute, initialized } from "@/lib/x402";
 import { put } from "@/lib/pending";
 import { spot } from "@/lib/prices";
+import { decide } from "@/lib/strategy";
 import { createBond, DEFAULT_BOND } from "@/lib/bond";
 import { randomUUID } from "node:crypto";
 
-const MAX_PRICE = "$0.50";
+const DEFAULT_MAX_PRICE_USD = 0.5;
 const HORIZON_SEC = 180; // short — must resolve twice inside a 4-min demo
+const ASSETS = new Set(["ETH", "BTC", "SOL"]);
 
 // Two sellers with different skill. The CONTRAST is the demo: one earns,
 // one settles at $0 repeatedly. `?seller=b` selects the bad one; the default
@@ -29,21 +31,33 @@ const AGENTS = {
   a: {
     addr: process.env.SELLER_A_ADDR!,
     pk: process.env.SELLER_A_PK as `0x${string}` | undefined,
-    name: "Meridian Alpha",
+    name: "Intelligent",
     skill: 0.85,
   },
   b: {
     addr: process.env.SELLER_B_ADDR!,
     pk: process.env.SELLER_B_PK as `0x${string}` | undefined,
-    name: "Kestrel Signals",
+    name: "Random",
     skill: 0.2,
   },
 } as const;
+
+function maxPriceFromRequest(request: NextRequest) {
+  const raw = Number(request.nextUrl.searchParams.get("max") ?? DEFAULT_MAX_PRICE_USD);
+  const usd = Number.isFinite(raw) ? Math.max(0.01, Math.min(5, raw)) : DEFAULT_MAX_PRICE_USD;
+  return {
+    usd,
+    label: `$${usd.toFixed(2)}`,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const key = (request.nextUrl.searchParams.get("seller") ?? "a") as "a" | "b";
   const agent = AGENTS[key] ?? AGENTS.a;
   const SELLER = agent.addr;
+  const requestedAsset = (request.nextUrl.searchParams.get("asset") ?? "ETH").toUpperCase();
+  const asset = ASSETS.has(requestedAsset) ? requestedAsset : "ETH";
+  const maxPrice = maxPriceFromRequest(request);
 
   if (!SELLER) {
     return Response.json(
@@ -55,7 +69,7 @@ export async function GET(request: NextRequest) {
   await initialized(); // fetches facilitator /supported — required, see lib/x402.ts
 
   const requirements = await server.buildPaymentRequirements(
-    signalRoute(SELLER, MAX_PRICE)
+    signalRoute(SELLER, maxPrice.label)
   );
 
   if (requirements.length === 0) {
@@ -116,10 +130,8 @@ export async function GET(request: NextRequest) {
   }
 
   // --- 4. serve now, settle later ------------------------------------------
-  const asset = "ETH";
   const priceAtIssue = await spot(asset);
-  const direction = Math.random() > 0.35 ? "up" : "down"; // TODO: real strategy
-  const confidence = 0.5 + Math.random() * 0.5;
+  const call = await decide(key, asset);
   const id = randomUUID();
 
   put({
@@ -127,9 +139,12 @@ export async function GET(request: NextRequest) {
     payload,
     requirements: chosen,
     seller: SELLER,
+    strategyName: agent.name,
+    authorizedMax: maxPrice.label,
+    authorizedMaxUsd: maxPrice.usd,
     asset,
-    direction,
-    confidence,
+    direction: call.direction,
+    confidence: call.confidence,
     horizonSec: HORIZON_SEC,
     priceAtIssue,
     issuedAt: Date.now(),
@@ -138,12 +153,14 @@ export async function GET(request: NextRequest) {
 
   return Response.json({
     id,
+    strategyName: agent.name,
     asset,
-    direction,
-    confidence: +confidence.toFixed(2),
+    direction: call.direction,
+    confidence: +call.confidence.toFixed(2),
     horizonSec: HORIZON_SEC,
     priceAtIssue,
-    maxPrice: MAX_PRICE,
+    rationale: call.rationale,
+    maxPrice: maxPrice.label,
     bond: bond ? { amount: bond.amount, note: "seller staked, slashed if wrong" } : null,
     note: `settles in ${HORIZON_SEC}s, scaled by realized accuracy`,
   });
