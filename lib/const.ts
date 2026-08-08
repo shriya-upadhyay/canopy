@@ -40,11 +40,19 @@ export const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
 export const FACILITATOR_ADDR_FALLBACK =
   "0x7f6a2850669202519f0fe8aa912451238820db86" as const;
 
-/** ERC-8004 on Monad. */
+/**
+ * ERC-8004 on Monad TESTNET. NOT the same addresses as Monad mainnet —
+ * verified via eth_getCode against https://testnet-rpc.monad.xyz. The
+ * mainnet addresses (0x8004A169...432 / 0x8004BAa1...b63) return empty code
+ * here; a register() call against them succeeds as a silent no-op (no logs,
+ * ~37k gas) instead of reverting, so the mismatch doesn't fail loudly.
+ * These are the shared vanity addresses erc-8004-contracts deploys across
+ * testnets (Sepolia, Base Sepolia, ...), confirmed present on Monad testnet too.
+ */
 export const ERC8004_IDENTITY =
-  "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432" as const;
+  "0x8004A818BFB912233c491871b3d84c89A494BD9e" as const;
 export const ERC8004_REPUTATION =
-  "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63" as const;
+  "0x8004B663056A597Dffe9eCcC1965A193B7388713" as const;
 
 export const txUrl = (hash: string) => `${EXPLORER}/tx/${hash}`;
 export const addrUrl = (a: string) => `${EXPLORER}/address/${a}`;
