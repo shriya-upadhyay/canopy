@@ -13,8 +13,6 @@ import { all } from "./pending";
  * A credit limit for an autonomous agent, set by its own settlement history.
  */
 
-const MAX_PRICE_USD = 0.5; // ceiling authorized per signal
-
 export interface TrackRecord {
   purchases: number;
   resolved: number;
@@ -29,9 +27,9 @@ export interface TrackRecord {
 export function trackRecord(): TrackRecord {
   const settled = all().filter((p) => p.settled);
 
-  const authorizedUsd = settled.length * MAX_PRICE_USD;
+  const authorizedUsd = settled.reduce((s, p) => s + (p.authorizedMaxUsd ?? 0.5), 0);
   const spentUsd = settled.reduce(
-    (s, p) => s + MAX_PRICE_USD * (p.settled?.accuracy ?? 0),
+    (s, p) => s + (p.authorizedMaxUsd ?? 0.5) * (p.settled?.accuracy ?? 0),
     0,
   );
   const hits = settled.filter((p) => (p.settled?.accuracy ?? 0) > 0).length;

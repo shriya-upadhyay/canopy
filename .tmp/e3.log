@@ -1,0 +1,23 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3123
+- Network:       http://172.16.10.3:3123
+- Environments: .env.local
+✓ Ready in 813ms
+✓ Running next.config.ts took 131ms
+
+ GET /api/signal?seller=a 402 in 177ms (next.js: 76ms, application-code: 100ms)
+ GET /api/signal?seller=a 200 in 153ms (next.js: 3ms, application-code: 150ms)
+ POST /api/buy?seller=a 200 in 723ms (next.js: 268ms, application-code: 455ms)
+ GET /api/signal?seller=a 402 in 8ms (next.js: 3ms, application-code: 5ms)
+ GET /api/signal?seller=a 200 in 97ms (next.js: 2.0ms, application-code: 95ms)
+ POST /api/buy?seller=a 200 in 127ms (next.js: 2ms, application-code: 125ms)
+ GET /api/signal?seller=a 402 in 9ms (next.js: 3ms, application-code: 6ms)
+ GET /api/signal?seller=a 200 in 146ms (next.js: 4ms, application-code: 142ms)
+ POST /api/buy?seller=a 200 in 173ms (next.js: 1.9ms, application-code: 171ms)
+ GET /api/signal?seller=a 402 in 12ms (next.js: 4ms, application-code: 8ms)
+ GET /api/signal?seller=a 200 in 66ms (next.js: 3ms, application-code: 63ms)
+ POST /api/buy?seller=a 200 in 95ms (next.js: 3ms, application-code: 92ms)
+ POST /api/demo/resolve?id=bc8590ef-aea9-499a-814d-ca2cbecbf5c3 200 in 453ms (next.js: 37ms, application-code: 415ms)
+ POST /api/demo/resolve?id=1d8497a6-e1d4-4db0-95a7-f536b4911bf8 200 in 684ms (next.js: 6ms, application-code: 678ms)
+ POST /api/demo/resolve?id=29c791ff-134a-4125-9337-6580ec77edde 200 in 620ms (next.js: 4ms, application-code: 616ms)
+ POST /api/demo/resolve?id=49d7f324-5f59-4741-8082-f266b98b70d1 200 in 490ms (next.js: 2ms, application-code: 488ms)

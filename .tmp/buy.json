@@ -1,0 +1,1 @@
+{"status":200,"id":"c31db61f-ddf1-4fbb-be51-4d08f7f31add","asset":"ETH","direction":"down","confidence":0.69,"rationale":"5m momentum -3.44bps → continuation","horizonSec":180,"priceAtIssue":1918.955,"maxPrice":"$0.50","bond":{"amount":"$2.00","note":"seller staked, slashed if wrong"},"note":"settles in 180s, scaled by realized accuracy"}

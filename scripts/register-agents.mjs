@@ -17,8 +17,8 @@ const IDENTITY = "0x8004A818BFB912233c491871b3d84c89A494BD9e";
 const REPUTATION = "0x8004B663056A597Dffe9eCcC1965A193B7388713";
 
 const SELLERS = [
-  { pkEnv: "SELLER_A_PK", name: "Meridian Alpha", blurb: "Short-horizon momentum on majors." },
-  { pkEnv: "SELLER_B_PK", name: "Kestrel Signals", blurb: "Claims a proprietary orderflow edge." },
+  { pkEnv: "SELLER_A_PK", name: "Intelligent", blurb: "Uses past market data for short-horizon momentum." },
+  { pkEnv: "SELLER_B_PK", name: "Random", blurb: "Random baseline with no real edge." },
 ];
 
 for (const s of SELLERS) {

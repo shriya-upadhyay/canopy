@@ -84,8 +84,8 @@ export function signalRoute(payTo: string, maxPrice: string): ResourceConfig {
  * NO ON-CHAIN TRANSACTION AT ALL. That is the demo.
  */
 export async function settleForAccuracy(
-  payload: any,
-  requirements: any,
+  payload: Parameters<typeof server.settlePayment>[0],
+  requirements: Parameters<typeof server.settlePayment>[1],
   accuracy: number // 0.0 .. 1.0
 ) {
   const pct = Math.max(0, Math.min(1, accuracy)) * 100;

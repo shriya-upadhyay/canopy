@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       priceAtIssue: p.priceAtIssue,
       priceNow,
       ...settled,
-      settledUsd: `$${(0.5 * acc).toFixed(4)}`,
+      settledUsd: `$${((p.authorizedMaxUsd ?? 0.5) * acc).toFixed(4)}`,
       // acc === 0 -> no txHash, because nothing settled on-chain. The demo.
       onChain: Boolean(txHash),
       success: (res as { success?: boolean })?.success,

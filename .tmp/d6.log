@@ -1,0 +1,10 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3116
+- Network:       http://172.16.10.3:3116
+- Environments: .env.local
+✓ Ready in 700ms
+✓ Running next.config.ts took 135ms
+
+ GET /api/signal?seller=a 402 in 291ms (next.js: 196ms, application-code: 95ms)
+ GET /api/signal?seller=a 200 in 246ms (next.js: 3ms, application-code: 243ms)
+ POST /api/buy?seller=a 200 in 2.1s (next.js: 1400ms, application-code: 669ms)

@@ -1,3 +1,8 @@
+import type { server } from "./x402";
+
+type PaymentPayload = Parameters<typeof server.settlePayment>[0];
+type PaymentRequirements = Parameters<typeof server.settlePayment>[1];
+
 // In-memory store of verified-but-unsettled signals.
 //
 // This exists because of the one architectural catch in the whole build:
@@ -11,10 +16,13 @@
 
 export type Pending = {
   id: string;
-  payload: unknown;       // PaymentPayload from the PAYMENT-SIGNATURE header
-  requirements: unknown;  // the PaymentRequirements we verified against
+  payload: PaymentPayload;       // PaymentPayload from the PAYMENT-SIGNATURE header
+  requirements: PaymentRequirements;  // the PaymentRequirements we verified against
   seller: string;
   sellerAgentId?: string; // ERC-8004 token id
+  strategyName?: string;
+  authorizedMax: string;
+  authorizedMaxUsd: number;
   asset: string;          // e.g. "ETH"
   direction: "up" | "down";
   confidence: number;     // 0..1, seller's own stated conviction
