@@ -23,8 +23,8 @@ import { momentumBps } from "./strategy";
 // ---------------------------------------------------------------------------
 export interface Preferences {
   assets: string[];
-  /** Ceiling the agent may authorize on any single signal, USD. */
-  maxPerSignal: number;
+  /** Ceiling the agent may authorize on any single strategy, USD. */
+  maxPerStrategy: number;
   /** Total it may authorize this session, USD. Independent of the Rain card. */
   sessionBudget: number;
   /** Won't buy from a seller whose observed hit rate is below this. */
@@ -36,7 +36,7 @@ export interface Preferences {
 
 export const DEFAULT_PREFS: Preferences = {
   assets: ["ETH"],
-  maxPerSignal: 0.5,
+  maxPerStrategy: 0.5,
   sessionBudget: 3.0,
   minSellerHitRate: 0.3,
   intervalSec: 20,
@@ -210,7 +210,7 @@ export function decide(): Decision {
     seller: best.key,
     reason:
       `${best.name} leads on track record (${record}). ` +
-      `Authorizing up to $${p.maxPerSignal.toFixed(2)}; my credit limit is $${credit.limitUsd}`,
+      `Authorizing up to $${p.maxPerStrategy.toFixed(2)}; my credit limit is $${credit.limitUsd}`,
   };
 }
 
@@ -256,7 +256,7 @@ export async function generateListing(asset = "ETH"): Promise<Listing | null> {
     direction: bps >= 0 ? "up" : "down",
     confidence,
     rationale: `5m momentum ${bps >= 0 ? "+" : ""}${bps.toFixed(2)}bps → continuation`,
-    // Prices its own signal off conviction — it asks for less when less sure.
+    // Prices its own strategy off conviction — it asks for less when less sure.
     askUsd: Number((0.25 + confidence * 0.35).toFixed(2)),
     bondUsd: 2.0,
     createdAt: Date.now(),

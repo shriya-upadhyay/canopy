@@ -90,7 +90,7 @@ Absolute stillness. The absence of movement is the subject.
 [HOUSE STYLE]
 ```
 
-Overlay: **Wrong signal → $0. No on-chain transaction.**
+Overlay: **Wrong strategy → $0. No on-chain transaction.**
 *Nobody had to arbitrate that.*
 
 > This is your strongest slide. Sit on it for a beat.
@@ -107,7 +107,7 @@ below. Anchored, load-bearing, consequential.
 [HOUSE STYLE]
 ```
 
-Overlay: **Sellers stake to list.** *A wrong signal doesn't just earn nothing —
+Overlay: **Sellers stake to list.** *A wrong strategy doesn't just earn nothing —
 it pays the buyer.*
 
 ---

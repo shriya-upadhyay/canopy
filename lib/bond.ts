@@ -2,13 +2,13 @@
 //
 // A stake is just an `upto` authorization pointing the other way.
 //
-// When a seller lists a signal it signs a Permit2 `upto` authorization for up
+// When a seller lists a strategy it signs a Permit2 `upto` authorization for up
 // to $2.00, payable TO THE BUYER. Then, at resolution:
 //
-//   signal correct  -> settle the bond at   0%  -> released, NO on-chain tx
-//   signal wrong    -> settle the bond at 100%  -> seller PAYS the buyer
+//   strategy correct  -> settle the bond at   0%  -> released, NO on-chain tx
+//   strategy wrong    -> settle the bond at 100%  -> seller PAYS the buyer
 //
-// So a wrong signal doesn't merely earn nothing. It costs the seller money,
+// So a wrong strategy doesn't merely earn nothing. It costs the seller money,
 // paid directly to the counterparty it misled. Same primitive, same
 // facilitator, zero new contracts, zero arbitration.
 //
@@ -23,11 +23,11 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createWalletClient, http } from "viem";
 import type { ResourceConfig } from "@x402/core/server";
 
-/** Default bond a seller must post to list a signal. */
+/** Default bond a seller must post to list a strategy. */
 export const DEFAULT_BOND = "$2.00";
 
 /**
- * Requirements for the seller's bond. Note payTo is the BUYER: if the signal
+ * Requirements for the seller's bond. Note payTo is the BUYER: if the strategy
  * is wrong, the money goes to the party that was misled, not to a treasury.
  * That keeps the incentive local and easy to explain.
  */
@@ -37,7 +37,7 @@ export function bondRoute(payToBuyer: string, bond: string): ResourceConfig {
     network: MONAD,
     payTo: payToBuyer,
     price: bond,
-    // Must comfortably outlast the signal horizon or the authorization
+    // Must comfortably outlast the strategy horizon or the authorization
     // expires before the resolver can slash it.
     maxTimeoutSeconds: 900,
   };
@@ -51,7 +51,7 @@ export async function buildBondRequirements(payToBuyer: string, bond = DEFAULT_B
 }
 
 /**
- * Verify a seller's posted bond before their signal is allowed to list.
+ * Verify a seller's posted bond before their strategy is allowed to list.
  *
  * IMPORTANT: this checks the signature and the seller's balance at listing
  * time. It does NOT lock the funds — Permit2 authorizations are claims on a
@@ -124,7 +124,7 @@ function signerFor(pk: `0x${string}`) {
  * authorization payable to the buyer. Mirrors scripts/prove-bond.mjs's
  * `authorize()`: build requirements, then sign a payload directly against
  * the scheme (no HTTP round-trip — the seller isn't responding to a 402,
- * it's posting a stake alongside the signal it's about to serve).
+ * it's posting a stake alongside the strategy it's about to serve).
  */
 export async function createBond(
   sellerPk: `0x${string}`,

@@ -1,4 +1,4 @@
-// Dashboard feed: every signal, what it settled for, and the agent's
+// Dashboard feed: every strategy, what it settled for, and the agent's
 // current earned credit limit. One poll, everything the demo needs on screen.
 
 import { all } from "@/lib/pending";
@@ -11,7 +11,7 @@ const NAMES: Record<string, string> = {
 };
 
 export async function GET() {
-  const signals = all().map((p) => {
+  const strategies = all().map((p) => {
     const acc = p.settled?.accuracy;
     const authorizedMaxUsd = p.authorizedMaxUsd ?? 0.5;
     return {
@@ -52,5 +52,5 @@ export async function GET() {
     };
   });
 
-  return Response.json({ credit: creditLimit(), signals });
+  return Response.json({ credit: creditLimit(), strategies });
 }

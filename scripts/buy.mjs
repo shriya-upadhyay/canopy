@@ -1,5 +1,5 @@
 /**
- * Buyer agent — discovers a seller, pays with the `upto` scheme, gets a signal.
+ * Buyer agent — discovers a seller, pays with the `upto` scheme, gets a strategy.
  *
  *   npm run buy -- seller-a
  *   npm run buy -- seller-b ETH
@@ -42,16 +42,16 @@ const client = new x402Client().register(MONAD, new UptoEvmScheme(signer));
 const paidFetch = wrapFetchWithPayment(fetch, client);
 
 console.log(`buyer  ${account.address}`);
-console.log(`GET    ${BASE}/api/signal/${seller}?asset=${asset}\n`);
+console.log(`GET    ${BASE}/api/strategy/${seller}?asset=${asset}\n`);
 
-const res = await paidFetch(`${BASE}/api/signal/${seller}?asset=${asset}`);
+const res = await paidFetch(`${BASE}/api/strategy/${seller}?asset=${asset}`);
 const body = await res.json();
 
 console.log(`status ${res.status}`);
 console.log(JSON.stringify(body, null, 2));
 
-if (body?.signal) {
-  const secs = body.signal.horizonSec;
+if (body?.strategy) {
+  const secs = body.strategy.horizonSec;
   console.log(
     `\n⏳ resolves in ${secs}s — watch the dashboard, or GET /api/ledger`,
   );

@@ -19,7 +19,7 @@ export interface TrackRecord {
   hits: number;
   spentUsd: number; // actually settled
   authorizedUsd: number; // ceilings committed
-  savedUsd: number; // ceilings NOT paid, because signals were wrong
+  savedUsd: number; // ceilings NOT paid, because strategies were wrong
   hitRate: number;
   efficiency: number; // spent / authorized — lower means better selection
 }
@@ -48,7 +48,7 @@ export function trackRecord(): TrackRecord {
 
 /** Starting allowance for an agent with no history, in USD cents. */
 export const BASE_LIMIT_CENTS = 500; // $5.00
-/** Headroom earned per signal that actually paid off. */
+/** Headroom earned per strategy that actually paid off. */
 export const REWARD_PER_HIT_CENTS = 250; // $2.50
 /** Hard ceiling a human sets. The agent can never earn past this. */
 export const MAX_LIMIT_CENTS = 5000; // $50.00
@@ -76,9 +76,9 @@ export function creditLimit(): CreditDecision {
   const limitCents = Math.min(MAX_LIMIT_CENTS, BASE_LIMIT_CENTS + earnedCents);
 
   const reason = record.resolved
-    ? `${record.hits}/${record.resolved} purchased signals paid out (${(record.hitRate * 100).toFixed(0)}% hit rate). ` +
+    ? `${record.hits}/${record.resolved} purchased strategies paid out (${(record.hitRate * 100).toFixed(0)}% hit rate). ` +
       `Earned $${(earnedCents / 100).toFixed(2)} of spending authority above the $${(BASE_LIMIT_CENTS / 100).toFixed(2)} base. ` +
-      `Conditional settlement saved this agent $${record.savedUsd.toFixed(2)} on signals that were wrong.`
+      `Conditional settlement saved this agent $${record.savedUsd.toFixed(2)} on strategies that were wrong.`
     : `No settled purchases yet. Agent starts at the $${(BASE_LIMIT_CENTS / 100).toFixed(2)} base allowance.`;
 
   return {

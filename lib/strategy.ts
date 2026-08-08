@@ -13,7 +13,7 @@
  *                 continuation. Confidence is CALIBRATED: it scales with trend
  *                 strength, so a flat tape produces a low-confidence call.
  *
- *   RANDOM      — no signal at all. Picks a direction by coin flip but always
+ *   RANDOM      — no strategy at all. Picks a direction by coin flip but always
  *                 states HIGH confidence. "Claims an edge, has none" — the
  *                 free-rider in our threat model.
  *
@@ -36,7 +36,7 @@ const PRODUCT: Record<string, string> = {
 /**
  * Trend over the last `minutes`, in basis points, from Coinbase 1-minute
  * candles. Real history with no warm-up period — important, because an
- * in-memory rolling buffer would read 0 on the first signal of every demo.
+ * in-memory rolling buffer would read 0 on the first strategy of every demo.
  *
  * Candle shape: [time, low, high, open, close, volume], newest first.
  */

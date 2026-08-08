@@ -1,4 +1,4 @@
-// Resolver. Scores every due signal and settles it for a FRACTION of the
+// Resolver. Scores every due strategy and settles it for a FRACTION of the
 // authorized max. Poll from the dashboard every ~5s, or fire it live on
 // stage — this is the moment the pitch turns on.
 //
@@ -67,5 +67,5 @@ export async function POST() {
 }
 
 export async function GET() {
-  return Response.json({ signals: all() });
+  return Response.json({ strategies: all() });
 }
