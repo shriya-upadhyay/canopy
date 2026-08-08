@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "approve": "node --env-file=.env.local scripts/approve-permit2.mjs",
     "buy": "node --env-file=.env.local scripts/buy.mjs",
     "prove": "node --env-file=.env.local scripts/prove-upto.mjs",

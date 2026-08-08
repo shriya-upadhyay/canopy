@@ -38,6 +38,14 @@ export async function GET() {
       txUrl: p.settled?.txHash ? txUrl(p.settled.txHash) : null,
       // acc === 0 -> no txHash, because nothing settled on-chain. The demo.
       onChain: Boolean(p.settled?.txHash),
+      bond: p.bond
+        ? {
+            amount: p.bond.amount,
+            status: p.bondSettled ? (p.bondSettled.slashed ? "slashed" : "released") : "posted",
+            txHash: p.bondSettled?.txHash ?? null,
+            txUrl: p.bondSettled?.txHash ? txUrl(p.bondSettled.txHash) : null,
+          }
+        : null,
     };
   });
 

@@ -4,9 +4,10 @@
 //
 // accuracy 0 -> "0.00%" -> $0 settled, NO on-chain transaction.
 
-import { due, markSettled, all } from "@/lib/pending";
+import { due, markSettled, markBondSettled, all } from "@/lib/pending";
 import { spot, accuracy as score } from "@/lib/prices";
 import { settleForAccuracy, initialized } from "@/lib/x402";
+import { resolveBond } from "@/lib/bond";
 
 export async function POST() {
   await initialized();
@@ -27,6 +28,15 @@ export async function POST() {
     };
     markSettled(p.id, settled);
 
+    // Resolve the seller's bond off the same accuracy score: wrong -> slashed
+    // (seller pays the buyer, on-chain), otherwise -> released, no tx.
+    let bondSettled;
+    if (p.bond) {
+      const b = await resolveBond(p.bond.payload, p.bond.requirements, acc);
+      bondSettled = { slashed: b.slashed, amountPct: b.amountPct, txHash: b.txHash, at: Date.now() };
+      markBondSettled(p.id, bondSettled);
+    }
+
     results.push({
       id: p.id,
       asset: p.asset,
@@ -36,6 +46,7 @@ export async function POST() {
       ...settled,
       // acc === 0 -> no txHash, because nothing settled on-chain. The demo.
       onChain: Boolean(txHash),
+      bond: bondSettled ?? null,
     });
 
     // TODO: ERC-8004 reputation feedback via agent0 SDK.
