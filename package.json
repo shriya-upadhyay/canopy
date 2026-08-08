@@ -6,12 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "approve": "node --env-file=.env.local scripts/approve-permit2.mjs",
+    "buy": "node --env-file=.env.local scripts/buy.mjs",
+    "prove": "node --env-file=.env.local scripts/prove-upto.mjs",
+    "prove:bond": "node --env-file=.env.local scripts/prove-bond.mjs",
+    "rain:check": "node --env-file=.env.local scripts/rain-smoke.mjs"
   },
   "dependencies": {
+    "@x402/core": "^2.21.0",
+    "@x402/evm": "2.12.0",
+    "@x402/fetch": "^2.21.0",
+    "@x402/next": "^2.21.0",
+    "dotenv": "^17.4.2",
     "next": "16.3.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "viem": "^2.55.11"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

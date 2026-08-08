@@ -1,0 +1,9 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3115
+- Network:       http://172.16.10.3:3115
+- Environments: .env.local
+✓ Ready in 668ms
+✓ Running next.config.ts took 128ms
+
+ POST /api/rain/purchase 200 in 5.1s (next.js: 570ms, application-code: 4.6s)
+ POST /api/rain/purchase 200 in 3.7s (next.js: 7ms, application-code: 3.7s)

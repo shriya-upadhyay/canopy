@@ -1,0 +1,26 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3113
+- Network:       http://172.16.10.3:3113
+- Environments: .env.local
+✓ Ready in 665ms
+✓ Running next.config.ts took 132ms
+
+
+thread 'tokio-rt-worker' (66) panicked at turbopack/crates/turbo-tasks-backend/src/backend/operation/mod.rs:729:25:
+Failed to restore meta for task TaskId 205: Failed to restore Meta for TaskId 205
+
+Caused by:
+    0: Looking up task storage for TaskId 205 from database failed
+    1: Invalid block type
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to /sessions/adoring-practical-volta/tmp/next-panic-19786f1f31687edbdb9412f1280a9efe.log.
+
+To help make Turbopack better, report this error by clicking here: https://bugs.nextjs.org/search?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20restore%20meta%20for%20task%20TaskId%20205%3A%20Failed%20to%20restore%20Meta%20for%20TaskId%20205&body=Turbopack%20version%3A%20%60d73f5622%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20restore%20meta%20for%20task%20TaskId%20205%3A%20Failed%20to%20restore%20Meta%20for%20TaskId%20205%0A%0ADebug%20info%3A%0A-%20Failed%20to%20restore%20meta%20for%20task%20TaskId%20205%3A%20Failed%20to%20restore%20Meta%20for%20TaskId%20205%0A%20%20%0A%20%20Caused%20by%3A%0A%20%20%20%20%20%200%3A%20Looking%20up%20task%20storage%20for%20TaskId%20205%20from%20database%20failed%0A%20%20%20%20%20%201%3A%20Invalid%20block%20type%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+
+thread 'tokio-rt-worker' (88) panicked at turbopack/crates/turbo-persistence/src/static_sorted_file.rs:570:27:
+range start index 7284461 out of range for slice of length 7283437
+○ Compiling /_error ...

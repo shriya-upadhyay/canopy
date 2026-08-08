@@ -1,0 +1,10 @@
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3114
+- Network:       http://172.16.10.3:3114
+- Environments: .env.local
+✓ Ready in 696ms
+✓ Running next.config.ts took 145ms
+⚠ Turbopack's filesystem cache has been deleted because we previously detected an internal error in Turbopack. Builds or page loads may be slower as a result.
+
+ GET / 200 in 2.1s (next.js: 1969ms, application-code: 124ms)
+ GET /api/ledger 200 in 224ms (next.js: 211ms, application-code: 13ms)
