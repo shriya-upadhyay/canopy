@@ -4,7 +4,7 @@
 //
 // accuracy 0 -> "0.00%" -> $0 settled, NO on-chain transaction.
 
-import { due, markSettled, markBondSettled, all } from "@/lib/pending";
+import { due, markSettled, markBondSettled, markBondError, all } from "@/lib/pending";
 import { spot, accuracy as score } from "@/lib/prices";
 import { settleForAccuracy, initialized } from "@/lib/x402";
 import { resolveBond } from "@/lib/bond";
@@ -30,13 +30,22 @@ export async function POST() {
     };
     markSettled(p.id, settled);
 
-    // Resolve the seller's bond off the same accuracy score: wrong -> slashed
-    // (seller pays the buyer, on-chain), otherwise -> released, no tx.
+    // Resolve the seller's bond off the same accuracy score, if this signal
+    // has one (bond creation is disabled going forward — see
+    // app/api/signal/route.ts — so this only fires for signals already in
+    // memory from before that change). Own try/catch: the buyer's payment
+    // above already committed, so a bond failure must not throw and 500 this
+    // whole batch, stranding every other due() signal with it.
     let bondSettled;
     if (p.bond) {
-      const b = await resolveBond(p.bond.payload, p.bond.requirements, acc);
-      bondSettled = { slashed: b.slashed, amountPct: b.amountPct, txHash: b.txHash, at: Date.now() };
-      markBondSettled(p.id, bondSettled);
+      try {
+        const b = await resolveBond(p.bond.payload, p.bond.requirements, acc);
+        bondSettled = { slashed: b.slashed, amountPct: b.amountPct, txHash: b.txHash, at: Date.now() };
+        markBondSettled(p.id, bondSettled);
+      } catch (e) {
+        markBondError(p.id, e instanceof Error ? e.message : String(e));
+        console.error(`bond resolution failed for ${p.id}:`, e);
+      }
     }
 
     // ERC-8004: buyer reviews the seller off the same accuracy score. Skipped

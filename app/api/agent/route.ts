@@ -23,6 +23,7 @@ import {
 } from "@/lib/agent";
 import { creditLimit } from "@/lib/credit";
 import { all } from "@/lib/pending";
+import { procureExternalSignal } from "@/lib/external-data";
 
 export const dynamic = "force-dynamic";
 
@@ -123,8 +124,20 @@ export async function POST(req: NextRequest) {
           `${j.merchant} · card ••${j.card?.last4} · limit $${j.policy?.limitUsd} earned from track record. ` +
             `Card was issued for this one purchase and is now spent.`,
         );
-        // Having paid for data, form a view and offer it to other agents.
-        await generateListing(asset);
+        // Closing the loop: form the view FROM the data just bought (an
+        // order-book read the marketplace's own momentum feed never sees —
+        // see lib/external-data.ts) and offer THAT for resale, instead of
+        // independently re-deriving momentum like the default path does.
+        try {
+          const boughtView = await procureExternalSignal(asset);
+          await generateListing(asset, boughtView);
+        } catch (e) {
+          say(
+            "skip",
+            "Purchased data unusable",
+            e instanceof Error ? e.message : String(e),
+          );
+        }
       }
       return Response.json({ action: "procure", result: j });
     }

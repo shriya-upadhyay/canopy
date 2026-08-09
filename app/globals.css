@@ -1,26 +1,51 @@
 @import "tailwindcss";
 
+/*
+ * Canopy theme — dark forest surface, pink/rose brand accent, olive-lime
+ * secondary accent. Always dark (this is a trading dashboard, not a
+ * marketing site) — no prefers-color-scheme branching.
+ *
+ * Chart-facing pair (pink/lime) validated via the dataviz skill's
+ * validate_palette.js against --surface, dark mode, --pairs all:
+ * lightness band, chroma floor, CVD separation (8.4), normal-vision floor,
+ * contrast — all PASS. Don't hand-edit these two without re-validating.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-canopy-bg: #12160f;
+  --color-canopy-surface: #1a2115;
+  --color-canopy-surface-2: #212b1b;
+  --color-canopy-border: #2a3324;
+  --color-canopy-pink: #ea4c7e;
+  --color-canopy-pink-dim: #7a2c46;
+  --color-canopy-lime: #8aa02a;
+  --color-canopy-lime-dim: #4f5c1c;
+  --color-canopy-ink: #eef0e8;
+  --color-canopy-muted: #8b9484;
+  --color-canopy-dim: #5c6455;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canopy-bg: var(--color-canopy-bg);
+  --color-canopy-surface: var(--color-canopy-surface);
+  --color-canopy-surface-2: var(--color-canopy-surface-2);
+  --color-canopy-border: var(--color-canopy-border);
+  --color-canopy-pink: var(--color-canopy-pink);
+  --color-canopy-pink-dim: var(--color-canopy-pink-dim);
+  --color-canopy-lime: var(--color-canopy-lime);
+  --color-canopy-lime-dim: var(--color-canopy-lime-dim);
+  --color-canopy-ink: var(--color-canopy-ink);
+  --color-canopy-muted: var(--color-canopy-muted);
+  --color-canopy-dim: var(--color-canopy-dim);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-canopy-bg);
+  color: var(--color-canopy-ink);
   font-family: Arial, Helvetica, sans-serif;
+  background-image:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(138, 160, 42, 0.06), transparent),
+    radial-gradient(ellipse 700px 500px at 100% 10%, rgba(234, 76, 126, 0.05), transparent);
+  background-attachment: fixed;
 }

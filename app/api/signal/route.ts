@@ -17,7 +17,6 @@ import { server, signalRoute, initialized } from "@/lib/x402";
 import { put } from "@/lib/pending";
 import { spot } from "@/lib/prices";
 import { decide } from "@/lib/strategy";
-import { createBond, DEFAULT_BOND } from "@/lib/bond";
 import { randomUUID } from "node:crypto";
 
 const DEFAULT_MAX_PRICE_USD = 0.5;
@@ -110,24 +109,23 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // --- 3. seller posts its bond ---------------------------------------------
-  // Skin in the game: a reverse-direction `upto` authorization payable to the
-  // buyer. Wrong signal -> slashed at resolution. See lib/bond.ts. Best-effort:
-  // a bond failure (e.g. seller wallet unfunded) shouldn't break signal
-  // delivery, it just means this listing has no stake behind it.
-  const buyerAddr = process.env.BUYER_ADDR;
-  let bond: { payload: unknown; requirements: unknown; amount: string } | undefined;
-  if (agent.pk && buyerAddr) {
-    try {
-      const { payload: bondPayload, requirements: bondReqs } = await createBond(
-        agent.pk,
-        buyerAddr
-      );
-      bond = { payload: bondPayload, requirements: bondReqs, amount: DEFAULT_BOND };
-    } catch (e) {
-      console.error("bond post failed, listing without stake:", e);
-    }
-  }
+  // --- 3. seller bond — DISABLED ---------------------------------------------
+  // lib/bond.ts is intact and this is a one-line flip to re-enable, but the
+  // facilitator rejects every bond's own verifyPayment unconditionally —
+  // confirmed across both sellers (funded and underfunded), the proven-safe
+  // 300s timeout, and multiple bond amounts down to $0.50 (matching the
+  // amount that always works for the buyer's own payment). Not a code bug we
+  // could find; team decision to stop chasing it and ship without seller
+  // stakes for now. Leaving createBond/verifyBond called nowhere rather than
+  // deleting them so this is easy to revisit.
+  // `as` cast, not a plain typed const: without it, TS narrows a
+  // const-initialized-to-undefined all the way to the literal `undefined`
+  // type, which makes the `bond ? ... : null` below unreachable per its
+  // control-flow analysis (TS2339 on `.amount`) even though the union type
+  // is what we actually want here for when this gets re-enabled.
+  const bond = undefined as
+    | { payload: unknown; requirements: unknown; amount: string }
+    | undefined;
 
   // --- 4. serve now, settle later ------------------------------------------
   const priceAtIssue = await spot(asset);
