@@ -19,7 +19,16 @@ import { createPublicClient, http, defineChain, parseAbi } from "viem";
 import { readFileSync } from "node:fs";
 
 const RPC = "https://testnet-rpc.monad.xyz";
-const IDENTITY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
+// Read the registry address out of lib/const.ts rather than hardcoding it.
+// The address in Monad's docs is the MAINNET one; testnet uses a different
+// deployment, and agent0-sdk resolves it itself. Hardcoding here is exactly
+// how this script ended up reporting "not deployed" while registration worked.
+const constSrc = readFileSync(new URL("../lib/const.ts", import.meta.url), "utf8");
+const IDENTITY = constSrc.match(/ERC8004_IDENTITY\s*=\s*\n?\s*"(0x[0-9a-fA-F]{40})"/)?.[1];
+if (!IDENTITY) {
+  console.error("Could not read ERC8004_IDENTITY from lib/const.ts");
+  process.exit(1);
+}
 const CHAIN_ID = 10143;
 
 const monad = defineChain({

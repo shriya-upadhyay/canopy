@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!--
+    Canopy mark. Two brand colours only:
+      #50624b  forest
+      #ff2fb6  pink
+    Six leaves seen from above with a gap in the middle: the aperture you get
+    looking up through a real canopy. The gap is punched in forest rather than
+    drawn as a third colour, and stays a clean circle when the icon shrinks.
+    Chunky on purpose so it survives 16px in a browser tab.
+    To invert (pink ground, forest leaves) swap the two hex values.
+  -->
+  <rect width="64" height="64" rx="14" fill="#50624b"/>
+
+  <g transform="translate(32 32)" fill="#ff2fb6">
+    <ellipse cx="0" cy="-13" rx="8.5" ry="13"/>
+    <ellipse cx="0" cy="-13" rx="8.5" ry="13" transform="rotate(60)"/>
+    <ellipse cx="0" cy="-13" rx="8.5" ry="13" transform="rotate(120)"/>
+    <ellipse cx="0" cy="-13" rx="8.5" ry="13" transform="rotate(180)"/>
+    <ellipse cx="0" cy="-13" rx="8.5" ry="13" transform="rotate(240)"/>
+    <ellipse cx="0" cy="-13" rx="8.5" ry="13" transform="rotate(300)"/>
+
+    <circle cx="0" cy="0" r="6" fill="#50624b"/>
+  </g>
+</svg>
