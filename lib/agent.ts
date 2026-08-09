@@ -32,6 +32,21 @@ export interface Preferences {
   minSellerHitRate: number;
   /** Seconds between decision cycles. */
   intervalSec: number;
+  /**
+   * Every Nth cycle, buy from the seller it has sampled LEAST rather than the
+   * one currently leading. 0 disables it.
+   *
+   * Without this the agent is purely greedy: it sorts by hit rate, takes the
+   * top one, and that seller's lead becomes self-reinforcing because it is the
+   * only one still being sampled. Simulated over 8 cycles, the runner-up was
+   * bought exactly zero times. That is a broken agent, not a cautious one —
+   * it cannot notice a seller that improved, and it cannot notice its own
+   * favourite degrading, because it stopped collecting evidence about both.
+   *
+   * A track record is only worth anything if you keep paying to refresh it.
+   * Exploration is what that costs.
+   */
+  exploreEvery: number;
   running: boolean;
 }
 
@@ -41,6 +56,7 @@ export const DEFAULT_PREFS: Preferences = {
   sessionBudget: 3.0,
   minSellerHitRate: 0.3,
   intervalSec: 20,
+  exploreEvery: 3,
   running: false,
 };
 
@@ -71,6 +87,8 @@ interface State {
   lastTick: number;
   spentThisSession: number;
   listings: Listing[];
+  /** Buy decisions made this session. Drives the exploration cadence. */
+  buyCycles: number;
 }
 
 /** A strategy the agent generated itself and would offer to other agents. */
@@ -97,7 +115,14 @@ const state: State = (g.__canopyAgent ??= {
   lastTick: 0,
   spentThisSession: 0,
   listings: [],
+  buyCycles: 0,
 });
+// Older persisted state may predate these fields.
+state.buyCycles ??= 0;
+state.prefs.exploreEvery ??= DEFAULT_PREFS.exploreEvery;
+
+/** Called once per buy decision, so exploration runs on a countable cadence. */
+export const countBuyCycle = () => ++state.buyCycles;
 
 export const prefs = () => state.prefs;
 export const setPrefs = (p: Partial<Preferences>) => {
@@ -136,6 +161,19 @@ const SELLER_KEYS: Record<string, string> = {
   [(process.env.SELLER_B_ADDR ?? "b").toLowerCase()]: "b",
 };
 const SELLER_NAMES: Record<string, string> = { a: "Intelligent", b: "Random" };
+
+/**
+ * Settled samples after which a below-bar seller stops being explored.
+ *
+ * Tuned for a live demo rather than for statistics: at the default 20s cycle
+ * and exploreEvery=3, a cap of 2 puts the write-off at roughly the 3.5 minute
+ * mark, so it lands inside a four-minute slot. A cap of 3 pushes it past 4
+ * minutes and the audience never sees the agent finish learning.
+ *
+ * Two samples is thin evidence in reality. That is an honest limitation of a
+ * hackathon demo, not a claim about how you would tune this for real money.
+ */
+export const EXPLORE_SAMPLE_CAP = 2;
 
 export function rankSellers(): SellerStat[] {
   const settled = all().filter((p) => p.settled);
@@ -206,6 +244,66 @@ export function decide(): Decision {
     };
   }
 
+  // EXPLOIT vs EXPLORE.
+  //
+  // Exploiting means buying from the leader. Doing only that is what makes the
+  // leader permanently the leader: it is the only seller still generating
+  // evidence, so nobody else's estimate can ever move. Every so often the
+  // agent deliberately spends on its least-sampled seller to keep the
+  // comparison honest.
+  //
+  // The cost is bounded and known: one ceiling of maxPerStrategy, and under
+  // `upto` a wrong strategy settles that at $0 anyway. Exploration is close to
+  // free here precisely because payment is conditional, which is not true of
+  // any marketplace that charges up front.
+  const explore =
+    p.exploreEvery > 0 && state.buyCycles > 0 && state.buyCycles % p.exploreEvery === 0;
+
+  if (explore) {
+    const probe = [...ranked]
+      .filter((s) => s.key !== best.key)
+      // DECAY. Exploration is for reducing uncertainty, and past a few samples
+      // there isn't much left to reduce. Once a seller has been tested this
+      // many times and is still under the mandate's bar, the agent stops
+      // paying to re-learn the same thing and writes it off.
+      //
+      // This is the difference between an agent that explores and an agent
+      // that just has a random tic. Judges will ask why it keeps buying from
+      // a seller it has already established is bad — this is the answer, and
+      // the cut-off is visible in the activity log when it happens.
+      .filter((s) => s.resolved < EXPLORE_SAMPLE_CAP || s.hitRate >= p.minSellerHitRate)
+      // Least-sampled first; ties broken toward the weaker record, since that
+      // is the estimate we know least about.
+      .sort((x, y) => x.resolved - y.resolved || x.hitRate - y.hitRate)[0];
+
+    if (probe) {
+      const seen = probe.resolved
+        ? `${probe.resolved} settled, ${(probe.hitRate * 100).toFixed(0)}% hit rate`
+        : "never sampled";
+      return {
+        action: "buy",
+        seller: probe.key,
+        reason:
+          `Exploring: buying ${probe.name} (${seen}) instead of ${best.name}, ` +
+          `to keep its track record current rather than assume it. ` +
+          `Risking a $${p.maxPerStrategy.toFixed(2)} ceiling; if it is wrong that settles at $0`,
+      };
+    }
+
+    // Everyone else is written off. Worth saying out loud once, because this
+    // is the agent reporting that it has finished learning something.
+    const done = ranked
+      .filter((s) => s.key !== best.key)
+      .map((s) => `${s.name} ${(s.hitRate * 100).toFixed(0)}% over ${s.resolved}`)
+      .join(", ");
+    say(
+      "decide",
+      "Stopped exploring",
+      `${done} — below my ${(p.minSellerHitRate * 100).toFixed(0)}% bar after ${EXPLORE_SAMPLE_CAP}+ settled strategies. ` +
+        `Consolidating on ${best.name}.`,
+    );
+  }
+
   const record = best.resolved
     ? `${(best.hitRate * 100).toFixed(0)}% hit rate over ${best.resolved} settled`
     : "no settled history yet — starting neutral";
@@ -227,6 +325,9 @@ export const resetSession = () => {
   state.spentThisSession = 0;
   state.log = [];
   state.listings = [];
+  // Otherwise a second demo run starts mid-cadence and explores at an
+  // unpredictable point, which is exactly what you don't want on stage.
+  state.buyCycles = 0;
 };
 
 // ---------------------------------------------------------------------------

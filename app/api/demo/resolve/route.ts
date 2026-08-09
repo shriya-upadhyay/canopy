@@ -20,6 +20,7 @@ import { settleForAccuracy, initialized } from "@/lib/x402";
 import { resolveBond } from "@/lib/bond";
 import { SELLERS } from "@/lib/sellers";
 import { giveFeedback, agentId as erc8004AgentId } from "@/lib/erc8004";
+import { forcedAccuracyFor } from "@/lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -34,12 +35,16 @@ export async function POST(req: NextRequest) {
     if (!p) return Response.json({ error: "unknown strategy" }, { status: 404 });
     if (p.settled) return Response.json({ error: "already settled", strategy: p }, { status: 409 });
 
-    const forced = req.nextUrl.searchParams.get("accuracy");
-    const priceNow = await spot(p.asset);
+    // An explicit ?accuracy= wins. Failing that, DEMO_OUTCOMES may pin this
+    // seller (see lib/demo.ts). Failing that, score it against the real market.
+    const queryForced = req.nextUrl.searchParams.get("accuracy");
+    const envForced = forcedAccuracyFor(p.seller);
+    const priceNow = await spot(p.asset, true);
     const acc =
-      forced !== null
-        ? Math.max(0, Math.min(1, Number(forced)))
-        : score(p.direction, p.priceAtIssue, priceNow, p.confidence);
+      queryForced !== null
+        ? Math.max(0, Math.min(1, Number(queryForced)))
+        : (envForced ?? score(p.direction, p.priceAtIssue, priceNow, p.confidence));
+    const forced = queryForced !== null || envForced !== null;
 
     const res = await settleForAccuracy(p.payload, p.requirements, acc);
     const txHash = (res as { transaction?: string })?.transaction;
@@ -49,6 +54,7 @@ export async function POST(req: NextRequest) {
       amountPct: `${(acc * 100).toFixed(2)}%`,
       txHash,
       at: Date.now(),
+      forced,
     };
     markSettled(id, settled);
 
@@ -83,7 +89,6 @@ export async function POST(req: NextRequest) {
 
     return Response.json({
       id,
-      forced: forced !== null,
       priceAtIssue: p.priceAtIssue,
       priceNow,
       ...settled,

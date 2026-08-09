@@ -34,6 +34,10 @@ export type Pending = {
     amountPct: string;
     txHash?: string;      // absent when accuracy === 0 -> no on-chain tx
     at: number;
+    /** Score was pinned by DEMO_OUTCOMES or ?accuracy=, not read off the
+     *  market. Surfaced in the UI so a scripted row is never mistaken for a
+     *  live one. See lib/demo.ts. */
+    forced?: boolean;
   };
   /** Seller's skin-in-the-game, posted at listing time. See lib/bond.ts. */
   bond?: {

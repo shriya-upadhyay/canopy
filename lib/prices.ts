@@ -17,9 +17,16 @@ const PRODUCT: Record<string, string> = {
   SOL: "SOL-USD",
 };
 
-export async function spot(asset: string): Promise<number> {
+/**
+ * @param fresh Bypass the cache. REQUIRED when resolving a strategy: the
+ *   threshold for full credit is a few basis points, and a 15-second-old
+ *   price is easily that far off. Scoring against a stale quote settles the
+ *   wrong amount, which on this system means real money moves incorrectly.
+ *   Display paths can happily use the cache.
+ */
+export async function spot(asset: string, fresh = false): Promise<number> {
   const hit = CACHE.get(asset);
-  if (hit && Date.now() - hit.t < FRESH_MS) return hit.p;
+  if (!fresh && hit && Date.now() - hit.t < FRESH_MS) return hit.p;
 
   const errors: string[] = [];
 
