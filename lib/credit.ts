@@ -25,24 +25,39 @@ export interface TrackRecord {
 }
 
 export function trackRecord(): TrackRecord {
-  const settled = all().filter((p) => p.settled);
+  const everything = all();
+  const settled = everything.filter((p) => p.settled);
+  const max = (p: (typeof everything)[number]) => p.authorizedMaxUsd ?? 0.5;
 
-  const authorizedUsd = settled.reduce((s, p) => s + (p.authorizedMaxUsd ?? 0.5), 0);
+  // COMMITMENT counts EVERYTHING, including strategies still pending.
+  // The agent commits to a ceiling the moment it signs the authorization, not
+  // when the strategy resolves. Counting only settled ones made the number sit
+  // at $0 while purchases were in flight, then jump — which hides the whole
+  // point, that a commitment exists before any money moves.
+  const authorizedUsd = everything.reduce((s, p) => s + max(p), 0);
+
+  // What actually settled. Resolved strategies only, obviously.
   const spentUsd = settled.reduce(
-    (s, p) => s + (p.authorizedMaxUsd ?? 0.5) * (p.settled?.accuracy ?? 0),
+    (s, p) => s + max(p) * (p.settled?.accuracy ?? 0),
     0,
   );
+
+  // "Never paid" is only meaningful over RESOLVED strategies. A pending one
+  // hasn't been saved, it just hasn't happened yet — so this compares spend
+  // against the ceilings of settled strategies, not against every commitment.
+  const settledAuthorizedUsd = settled.reduce((s, p) => s + max(p), 0);
+
   const hits = settled.filter((p) => (p.settled?.accuracy ?? 0) > 0).length;
 
   return {
-    purchases: all().length,
+    purchases: everything.length,
     resolved: settled.length,
     hits,
     spentUsd,
     authorizedUsd,
-    savedUsd: authorizedUsd - spentUsd,
+    savedUsd: settledAuthorizedUsd - spentUsd,
     hitRate: settled.length ? hits / settled.length : 0,
-    efficiency: authorizedUsd ? spentUsd / authorizedUsd : 0,
+    efficiency: settledAuthorizedUsd ? spentUsd / settledAuthorizedUsd : 0,
   };
 }
 
