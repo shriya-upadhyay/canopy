@@ -428,10 +428,10 @@ export default function Dashboard() {
 
         {/* ── money strip ────────────────────────────────────────── */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="Authorized (ceilings)" value={`$${(rec?.authorizedUsd ?? 0).toFixed(2)}`} />
+          <Stat label="Max it could have paid" value={`$${(rec?.authorizedUsd ?? 0).toFixed(2)}`} />
           <Stat label="Actually paid" value={`$${(rec?.spentUsd ?? 0).toFixed(2)}`} accent="text-emerald-400" />
           <Stat
-            label="Saved by conditional settlement"
+            label="Never paid"
             value={`$${(rec?.savedUsd ?? 0).toFixed(2)}`}
             accent="text-amber-400"
           />
