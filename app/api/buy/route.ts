@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     const origin = req.nextUrl.origin;
     const res = await paidFetch(
-      `${origin}/api/signal?seller=${seller}&asset=${encodeURIComponent(asset)}&max=${encodeURIComponent(max)}`
+      `${origin}/api/strategy?seller=${seller}&asset=${encodeURIComponent(asset)}&max=${encodeURIComponent(max)}`
     );
     const body = await res.json();
 

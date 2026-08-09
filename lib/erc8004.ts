@@ -5,7 +5,7 @@
 // encodes the registration file as an on-chain data URI, so no IPFS backend
 // is needed.
 //
-// Feedback happens live: after a signal resolves, the BUYER submits reputation
+// Feedback happens live: after a strategy resolves, the BUYER submits reputation
 // feedback about the SELLER it just transacted with, scored by the same
 // accuracy used to settle the payment and the bond. Best-effort — a feedback
 // failure (e.g. seller has no registered agent yet) shouldn't block settlement.
@@ -50,7 +50,7 @@ export async function registerAgent(
 
 /**
  * Buyer reviews a seller off the same accuracy score used to settle the
- * signal and the bond. Returns null (rather than throwing) on any failure —
+ * strategy and the bond. Returns null (rather than throwing) on any failure —
  * missing BUYER_PK, seller not yet registered, RPC hiccup — so a feedback
  * miss never blocks the settlement response.
  */

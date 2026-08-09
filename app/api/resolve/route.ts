@@ -1,4 +1,4 @@
-// Resolver. Scores every due signal and settles it for a FRACTION of the
+// Resolver. Scores every due strategy and settles it for a FRACTION of the
 // authorized max. Poll from the dashboard every ~5s, or fire it live on
 // stage — this is the moment the pitch turns on.
 //
@@ -32,7 +32,7 @@ export async function POST() {
 
     // Resolve the seller's bond off the same accuracy score, if this signal
     // has one (bond creation is disabled going forward — see
-    // app/api/signal/route.ts — so this only fires for signals already in
+    // app/api/strategy/route.ts — so this only fires for signals already in
     // memory from before that change). Own try/catch: the buyer's payment
     // above already committed, so a bond failure must not throw and 500 this
     // whole batch, stranding every other due() signal with it.
@@ -76,5 +76,5 @@ export async function POST() {
 }
 
 export async function GET() {
-  return Response.json({ signals: all() });
+  return Response.json({ strategies: all() });
 }

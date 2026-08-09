@@ -59,7 +59,7 @@ export function initialized(): Promise<void> {
  *
  * `price` here is the CEILING the buyer authorizes, not what they pay.
  */
-export function signalRoute(payTo: string, maxPrice: string): ResourceConfig {
+export function strategyRoute(payTo: string, maxPrice: string): ResourceConfig {
   return {
     scheme: "upto",
     network: MONAD,

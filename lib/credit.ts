@@ -19,36 +19,51 @@ export interface TrackRecord {
   hits: number;
   spentUsd: number; // actually settled
   authorizedUsd: number; // ceilings committed
-  savedUsd: number; // ceilings NOT paid, because signals were wrong
+  savedUsd: number; // ceilings NOT paid, because strategies were wrong
   hitRate: number;
   efficiency: number; // spent / authorized — lower means better selection
 }
 
 export function trackRecord(): TrackRecord {
-  const settled = all().filter((p) => p.settled);
+  const everything = all();
+  const settled = everything.filter((p) => p.settled);
+  const max = (p: (typeof everything)[number]) => p.authorizedMaxUsd ?? 0.5;
 
-  const authorizedUsd = settled.reduce((s, p) => s + (p.authorizedMaxUsd ?? 0.5), 0);
+  // COMMITMENT counts EVERYTHING, including strategies still pending.
+  // The agent commits to a ceiling the moment it signs the authorization, not
+  // when the strategy resolves. Counting only settled ones made the number sit
+  // at $0 while purchases were in flight, then jump — which hides the whole
+  // point, that a commitment exists before any money moves.
+  const authorizedUsd = everything.reduce((s, p) => s + max(p), 0);
+
+  // What actually settled. Resolved strategies only, obviously.
   const spentUsd = settled.reduce(
-    (s, p) => s + (p.authorizedMaxUsd ?? 0.5) * (p.settled?.accuracy ?? 0),
+    (s, p) => s + max(p) * (p.settled?.accuracy ?? 0),
     0,
   );
+
+  // "Never paid" is only meaningful over RESOLVED strategies. A pending one
+  // hasn't been saved, it just hasn't happened yet — so this compares spend
+  // against the ceilings of settled strategies, not against every commitment.
+  const settledAuthorizedUsd = settled.reduce((s, p) => s + max(p), 0);
+
   const hits = settled.filter((p) => (p.settled?.accuracy ?? 0) > 0).length;
 
   return {
-    purchases: all().length,
+    purchases: everything.length,
     resolved: settled.length,
     hits,
     spentUsd,
     authorizedUsd,
-    savedUsd: authorizedUsd - spentUsd,
+    savedUsd: settledAuthorizedUsd - spentUsd,
     hitRate: settled.length ? hits / settled.length : 0,
-    efficiency: authorizedUsd ? spentUsd / authorizedUsd : 0,
+    efficiency: settledAuthorizedUsd ? spentUsd / settledAuthorizedUsd : 0,
   };
 }
 
 /** Starting allowance for an agent with no history, in USD cents. */
 export const BASE_LIMIT_CENTS = 500; // $5.00
-/** Headroom earned per signal that actually paid off. */
+/** Headroom earned per strategy that actually paid off. */
 export const REWARD_PER_HIT_CENTS = 250; // $2.50
 /** Hard ceiling a human sets. The agent can never earn past this. */
 export const MAX_LIMIT_CENTS = 5000; // $50.00
@@ -76,9 +91,9 @@ export function creditLimit(): CreditDecision {
   const limitCents = Math.min(MAX_LIMIT_CENTS, BASE_LIMIT_CENTS + earnedCents);
 
   const reason = record.resolved
-    ? `${record.hits}/${record.resolved} purchased signals paid out (${(record.hitRate * 100).toFixed(0)}% hit rate). ` +
+    ? `${record.hits}/${record.resolved} purchased strategies paid out (${(record.hitRate * 100).toFixed(0)}% hit rate). ` +
       `Earned $${(earnedCents / 100).toFixed(2)} of spending authority above the $${(BASE_LIMIT_CENTS / 100).toFixed(2)} base. ` +
-      `Conditional settlement saved this agent $${record.savedUsd.toFixed(2)} on signals that were wrong.`
+      `Conditional settlement saved this agent $${record.savedUsd.toFixed(2)} on strategies that were wrong.`
     : `No settled purchases yet. Agent starts at the $${(BASE_LIMIT_CENTS / 100).toFixed(2)} base allowance.`;
 
   return {

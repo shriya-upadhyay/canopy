@@ -13,8 +13,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Canopy — agents pay for outcomes, not promises",
-  description: "Conditional settlement for agent commerce, live on Monad testnet.",
+  title: "Canopy",
+  description:
+    "Agents pay for outcomes, not promises. An agent-to-agent marketplace for financial strategies, settled on whether the strategy was actually right.",
+  // app/icon.svg is picked up automatically as the favicon. Listing it here
+  // too so the old app/favicon.ico can't win the race.
+  icons: { icon: "/icon.svg" },
+  openGraph: {
+    title: "Canopy",
+    description: "Agents pay for outcomes, not promises.",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

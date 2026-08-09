@@ -3,11 +3,11 @@ import type { server } from "./x402";
 type PaymentPayload = Parameters<typeof server.settlePayment>[0];
 type PaymentRequirements = Parameters<typeof server.settlePayment>[1];
 
-// In-memory store of verified-but-unsettled signals.
+// In-memory store of verified-but-unsettled strategies.
 //
 // This exists because of the one architectural catch in the whole build:
 // the default `withX402` wrapper verifies AND settles inside a single
-// request. Your signal doesn't resolve for another 2-3 minutes, so you
+// request. Your strategy doesn't resolve for another 2-3 minutes, so you
 // cannot use it. Verify and settle are separate facilitator calls
 // (POST /verify, POST /settle), so splitting them is supported —
 // you just have to hold the payload yourself in between.
@@ -48,7 +48,7 @@ export type Pending = {
     at: number;
   };
   /** Set when resolveBond throws. Bond creation is currently disabled (see
-   *  app/api/signal/route.ts), so this only matters for signals already in
+   *  app/api/strategy/route.ts), so this only matters for signals already in
    *  memory from before that change. */
   bondError?: string;
 };
@@ -59,7 +59,7 @@ export const put = (p: Pending) => void store.set(p.id, p);
 export const get = (id: string) => store.get(id);
 export const all = () => [...store.values()].sort((a, b) => b.issuedAt - a.issuedAt);
 
-/** Signals whose horizon has elapsed and which haven't settled yet. */
+/** Strategies whose horizon has elapsed and which haven't settled yet. */
 export const due = () =>
   [...store.values()].filter(
     (p) => !p.settled && Date.now() >= p.issuedAt + p.horizonSec * 1000

@@ -1,9 +1,0 @@
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3128
-- Network:       http://172.16.10.3:3128
-- Environments: .env.local
-✓ Ready in 876ms
-✓ Running next.config.ts took 149ms
-
- GET / 200 in 406ms (next.js: 278ms, application-code: 129ms)
- POST /api/resolve 200 in 266ms (next.js: 133ms, application-code: 132ms)

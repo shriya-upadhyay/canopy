@@ -1,11 +1,11 @@
 /**
  * Proves the SYMMETRIC settlement — the strongest 30 seconds of the demo.
  *
- * One wrong signal produces two settlements at once:
+ * One wrong strategy produces two settlements at once:
  *   buyer's payment  ->   0%  -> buyer pays nothing, no on-chain tx
  *   seller's bond    -> 100%  -> seller pays the buyer $2.00, on-chain
  *
- * And one correct signal produces the mirror image:
+ * And one correct strategy produces the mirror image:
  *   buyer's payment  -> 100%  -> seller earns $0.50
  *   seller's bond    ->   0%  -> released, no on-chain tx
  *
@@ -94,8 +94,8 @@ console.log(`buyer  ${buyer.address}`);
 console.log(`seller ${seller.address}\n`);
 console.log(`start  buyer=${usd(await bal(buyer.address))}  seller=${usd(await bal(seller.address))}\n`);
 
-// ── SCENARIO 1: signal is WRONG ────────────────────────────────────────────
-console.log("SCENARIO 1 — signal is WRONG");
+// ── SCENARIO 1: strategy is WRONG ────────────────────────────────────────────
+console.log("SCENARIO 1 — strategy is WRONG");
 const b1 = await authorize(buyerScheme, seller.address, "$0.50"); // buyer -> seller
 const s1 = await authorize(sellerScheme, buyer.address, "$2.00"); // seller -> buyer (bond)
 const ok1 =
@@ -103,8 +103,8 @@ const ok1 =
   (await settle("seller bond SLASHED", s1, "100%"));
 console.log(`   after  buyer=${usd(await bal(buyer.address))}  seller=${usd(await bal(seller.address))}\n`);
 
-// ── SCENARIO 2: signal is CORRECT ──────────────────────────────────────────
-console.log("SCENARIO 2 — signal is CORRECT");
+// ── SCENARIO 2: strategy is CORRECT ──────────────────────────────────────────
+console.log("SCENARIO 2 — strategy is CORRECT");
 const b2 = await authorize(buyerScheme, seller.address, "$0.50");
 const s2 = await authorize(sellerScheme, buyer.address, "$2.00");
 const ok2 =
