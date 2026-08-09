@@ -10,14 +10,22 @@ import { settleForAccuracy, initialized } from "@/lib/x402";
 import { resolveBond } from "@/lib/bond";
 import { SELLERS } from "@/lib/sellers";
 import { giveFeedback, agentId as erc8004AgentId } from "@/lib/erc8004";
+import { forcedAccuracyFor } from "@/lib/demo";
 
 export async function POST() {
   await initialized();
   const results = [];
 
   for (const p of due()) {
-    const priceNow = await spot(p.asset);
-    const acc = score(p.direction, p.priceAtIssue, priceNow, p.confidence);
+    const priceNow = await spot(p.asset, true);
+
+    // DEMO_OUTCOMES can pin a seller's score so both settlement paths are
+    // guaranteed to appear inside a four-minute slot. Everything downstream
+    // of this line — signature, facilitator, on-chain tx — stays real. See
+    // lib/demo.ts. Unset in .env.local and this is a no-op.
+    const forced = forcedAccuracyFor(p.seller);
+    const acc =
+      forced ?? score(p.direction, p.priceAtIssue, priceNow, p.confidence);
 
     const res = await settleForAccuracy(p.payload, p.requirements, acc);
     const txHash = (res as { transaction?: string })?.transaction;
@@ -27,6 +35,7 @@ export async function POST() {
       amountPct: `${(acc * 100).toFixed(2)}%`,
       txHash,
       at: Date.now(),
+      forced: forced !== null,
     };
     markSettled(p.id, settled);
 

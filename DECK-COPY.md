@@ -202,3 +202,35 @@ Being upfront on these reads as confidence. Getting caught on them doesn't.
 - **Resale.** Nothing stops a buyer reselling a strategy. A three minute call is
   worthless by the time you resell it, and a reseller has no bond behind it, so
   no credibility. We didn't build enforcement.
+
+---
+
+## TODO: add a slide on exploration (added Aug 8)
+
+**The agent explores, not just exploits.**
+
+Buying only from the current leader is how a leaderboard freezes. The leader is
+the only seller still being tested, so nobody else's record can move.
+
+Canopy's agent spends on its least-tested seller every third purchase. When that
+seller is wrong, it settles at $0, so discovery is nearly free.
+
+After two bad settlements it stops paying to re-learn the same thing and
+consolidates.
+
+This only works because payment is conditional. Charge up front and discovery
+gets expensive, so incumbents never get challenged.
+
+### Have ready for Q&A: "is there an LLM in the loop?"
+
+No, and say so plainly. `decide()` is a deterministic policy. There is no model
+dependency in the repo.
+
+> The policy is deterministic on purpose. It's a mandate, not a prompt. You can
+> read it, test it, and predict it, which is what you want from something
+> authorizing payments while you're asleep. Swapping the policy for a model is a
+> drop-in change. The settlement layer doesn't care what decided.
+
+Avoid saying the agent "reasons about" sellers. It ranks them. The autonomy
+claim that holds up is that it runs unattended inside a mandate and commits real
+money with nobody clicking anything.

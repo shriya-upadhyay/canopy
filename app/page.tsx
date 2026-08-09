@@ -29,6 +29,8 @@ type Strategy = {
   txHash: string | null;
   txUrl: string | null;
   onChain: boolean;
+  /** Score was pinned for the demo rather than read off the market. */
+  forced?: boolean;
   bond: { amount: string; status: "posted" | "slashed" | "released"; txHash: string | null; txUrl: string | null } | null;
 };
 
@@ -65,6 +67,8 @@ type Preferences = {
   sessionBudget: number;
   minSellerHitRate: number;
   intervalSec: number;
+  /** Every Nth buy, sample the least-tested seller instead of the leader. */
+  exploreEvery: number;
   running: boolean;
 };
 
@@ -113,21 +117,42 @@ export default function Dashboard() {
   const resolvingDue = useRef(false);
   const latestSignals = useRef<Strategy[]>([]);
 
+  /**
+   * Poll server state.
+   *
+   * NEVER blank the UI on a bad response. A cycle self-calls /api/buy and can
+   * run for several seconds while this poll keeps firing every 2s; under that
+   * contention a poll can come back as an error body rather than the shape we
+   * expect. The old code did `ledger.strategies ?? []` and
+   * `setPrefs(agent.prefs ?? null)`, so one unhappy response wiped the
+   * settlement feed AND flipped the agent to "paused" mid-run.
+   *
+   * So: only replace a piece of state when the response actually carried it.
+   * A failed poll now changes nothing and the next one two seconds later
+   * repaints. Stale beats empty.
+   */
   const load = useCallback(async () => {
     try {
       const [ledgerRes, agentRes] = await Promise.all([
         fetch("/api/ledger", { cache: "no-store" }),
         fetch("/api/agent", { cache: "no-store" }),
       ]);
-      const ledger = await ledgerRes.json();
-      const agent = await agentRes.json();
-      const nextSignals = ledger.strategies ?? [];
-      latestSignals.current = nextSignals;
-      setSignals(nextSignals);
-      setCredit(ledger.credit ?? null);
-      if (!prefsDirty.current) setPrefs(agent.prefs ?? null);
-      setAgentLog(agent.log ?? []);
-      setAgentListings(agent.listings ?? []);
+
+      if (ledgerRes.ok) {
+        const ledger = await ledgerRes.json().catch(() => null);
+        if (ledger && Array.isArray(ledger.strategies)) {
+          latestSignals.current = ledger.strategies;
+          setSignals(ledger.strategies);
+        }
+        if (ledger?.credit) setCredit(ledger.credit);
+      }
+
+      if (agentRes.ok) {
+        const agent = await agentRes.json().catch(() => null);
+        if (agent?.prefs && !prefsDirty.current) setPrefs(agent.prefs);
+        if (Array.isArray(agent?.log)) setAgentLog(agent.log);
+        if (Array.isArray(agent?.listings)) setAgentListings(agent.listings);
+      }
     } catch {
       /* keep last good state */
     }
@@ -440,6 +465,18 @@ export default function Dashboard() {
                 setPrefs({ ...prefs, intervalSec });
               }}
             />
+            <MandateSlider
+              label="Explore every"
+              value={prefs.exploreEvery ?? 3}
+              min={0}
+              max={6}
+              step={1}
+              format={(v) => (v === 0 ? "never" : `${v} buys`)}
+              onChange={(exploreEvery) => {
+                prefsDirty.current = true;
+                setPrefs({ ...prefs, exploreEvery });
+              }}
+            />
 
             <button
               onClick={() => saveMandate()}
@@ -612,6 +649,14 @@ export default function Dashboard() {
                           <span className="text-canopy-dim">
                             {" "}conf {s.confidence} · @ ${s.priceAtIssue?.toFixed(2)}
                           </span>
+                          {s.forced && (
+                            <span
+                              title="Score pinned by DEMO_OUTCOMES. The settlement itself is real."
+                              className="ml-2 align-middle text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-400"
+                            >
+                              scripted
+                            </span>
+                          )}
                         </div>
                         {s.status === "zero" && (
                           <div className="text-xs text-red-400 mt-0.5 font-medium">

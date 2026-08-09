@@ -4,6 +4,7 @@
 import { all } from "@/lib/pending";
 import { creditLimit } from "@/lib/credit";
 import { txUrl } from "@/lib/const";
+import { demoMode } from "@/lib/demo";
 
 const NAMES: Record<string, string> = {
   [(process.env.SELLER_A_ADDR ?? "a").toLowerCase()]: "Intelligent",
@@ -33,6 +34,8 @@ export async function GET() {
             : "partial"
         : "pending",
       accuracy: acc,
+      // True when the score was pinned rather than read off the market.
+      forced: Boolean(p.settled?.forced),
       authorizedMax: p.authorizedMax ?? `$${authorizedMaxUsd.toFixed(2)}`,
       authorizedMaxUsd,
       settled: p.settled ? `$${(authorizedMaxUsd * acc!).toFixed(4)}` : null,
@@ -52,5 +55,5 @@ export async function GET() {
     };
   });
 
-  return Response.json({ credit: creditLimit(), strategies });
+  return Response.json({ credit: creditLimit(), strategies, demoMode: demoMode() });
 }

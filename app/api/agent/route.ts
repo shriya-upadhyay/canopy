@@ -16,6 +16,7 @@ import {
   decide,
   rankSellers,
   noteSpend,
+  countBuyCycle,
   spent,
   listings,
   generateListing,
@@ -83,6 +84,9 @@ export async function POST(req: NextRequest) {
       }
 
       noteSpend(p.maxPerStrategy);
+      // Only count purchases that actually went through, so a run of failed
+      // buys can't silently advance the cadence and skip an exploration turn.
+      countBuyCycle();
       say(
         "buy",
         `Bought ${j.asset} ${String(j.direction).toUpperCase()} — authorized up to $${p.maxPerStrategy.toFixed(2)}`,
