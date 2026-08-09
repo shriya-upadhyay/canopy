@@ -14,7 +14,7 @@
 // rigged outcome presented as luck.
 
 import { NextRequest } from "next/server";
-import { get, markSettled, markBondSettled } from "@/lib/pending";
+import { get, markSettled, markBondSettled, markBondError } from "@/lib/pending";
 import { spot, accuracy as score } from "@/lib/prices";
 import { settleForAccuracy, initialized } from "@/lib/x402";
 import { resolveBond } from "@/lib/bond";
@@ -52,12 +52,23 @@ export async function POST(req: NextRequest) {
     };
     markSettled(id, settled);
 
-    // Same accuracy score slashes or releases the seller's bond, if one was posted.
+    // Same accuracy score slashes or releases the seller's bond, if this
+    // signal has one (bond creation is disabled going forward — see
+    // app/api/strategy/route.ts — so this only fires for signals already in
+    // memory from before that change). Own try/catch: the auto-resolve loop
+    // in app/page.tsx calls this endpoint on a timer, and an uncaught bond
+    // failure here was surfacing as "Auto-resolve failed: unsupported_scheme"
+    // in the dashboard on every poll.
     let bondSettled;
     if (p.bond) {
-      const b = await resolveBond(p.bond.payload, p.bond.requirements, acc);
-      bondSettled = { slashed: b.slashed, amountPct: b.amountPct, txHash: b.txHash, at: Date.now() };
-      markBondSettled(id, bondSettled);
+      try {
+        const b = await resolveBond(p.bond.payload, p.bond.requirements, acc);
+        bondSettled = { slashed: b.slashed, amountPct: b.amountPct, txHash: b.txHash, at: Date.now() };
+        markBondSettled(id, bondSettled);
+      } catch (e) {
+        markBondError(id, e instanceof Error ? e.message : String(e));
+        console.error(`bond resolution failed for ${id}:`, e);
+      }
     }
 
     // ERC-8004: buyer reviews the seller off the same accuracy score. Skipped

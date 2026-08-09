@@ -17,6 +17,7 @@
 import { all } from "./pending";
 import { creditLimit } from "./credit";
 import { momentumBps } from "./strategy";
+import type { Call } from "./strategy";
 
 // ---------------------------------------------------------------------------
 // The mandate — what the human sets once
@@ -83,6 +84,10 @@ export interface Listing {
   bondUsd: number;
   createdAt: number;
   status: "draft" | "listed";
+  /** "momentum" = derived in-house from the marketplace's own feed.
+   *  "external" = derived from data just bought via the Rain boundary —
+   *  closes the loop between paying for outside data and reselling insight. */
+  source: "momentum" | "external";
 }
 
 const g = globalThis as unknown as { __canopyAgent?: State };
@@ -228,24 +233,43 @@ export const resetSession = () => {
 // Sell side — the agent generates its OWN strategies and offers them
 // ---------------------------------------------------------------------------
 /**
- * The agent forms a view from market data and prices it for sale. It only
- * lists when it genuinely has conviction — a flat tape produces no listing,
- * because listing a low-conviction call means posting a bond it expects to
- * lose. The bond is what stops an agent spamming the market.
+ * The agent forms a view and prices it for sale. It only lists when it
+ * genuinely has conviction — a flat/uninformative view produces no listing.
+ *
+ * `boughtView`, when passed, is data just purchased via the Rain boundary
+ * (see lib/external-data.ts) — the agent resells insight it paid for instead
+ * of only ever reselling its own in-house momentum read. Omit it and this
+ * falls back to deriving momentum itself, same as before.
  */
-export async function generateListing(asset = "ETH"): Promise<Listing | null> {
-  const bps = await momentumBps(asset, 5);
-  const strength = Math.min(Math.abs(bps) / 8, 1);
-  const confidence = Number((0.5 + strength * 0.45).toFixed(2));
+export async function generateListing(
+  asset = "ETH",
+  boughtView?: Call,
+): Promise<Listing | null> {
+  const source: Listing["source"] = boughtView ? "external" : "momentum";
 
-  // ~1.4bps of 5-minute movement. Low enough that a normal tape produces
-  // listings during a demo, high enough that a genuinely flat tape still
-  // makes the agent abstain — which is the more interesting behaviour.
-  if (confidence < 0.58) {
+  let call: Call;
+  if (boughtView) {
+    call = boughtView;
+  } else {
+    const bps = await momentumBps(asset, 5);
+    const strength = Math.min(Math.abs(bps) / 8, 1);
+    call = {
+      direction: bps >= 0 ? "up" : "down",
+      confidence: Number((0.5 + strength * 0.45).toFixed(2)),
+      rationale: `5m momentum ${bps >= 0 ? "+" : ""}${bps.toFixed(2)}bps → continuation`,
+    };
+  }
+
+  // ~1.4bps of 5-minute momentum clears this bar; the external order-book
+  // signal is calibrated to the same floor. Low enough that a normal tape
+  // produces listings during a demo, high enough that a genuinely flat/
+  // balanced read still makes the agent abstain — the more interesting
+  // behaviour either way.
+  if (call.confidence < 0.58) {
     say(
       "observe",
-      `Formed a view on ${asset} but conviction is only ${(confidence * 100).toFixed(0)}% — not listing`,
-      `5m momentum ${bps >= 0 ? "+" : ""}${bps.toFixed(2)}bps. Listing would mean posting a $2.00 bond against a call I don't believe.`,
+      `Formed a view on ${asset} but conviction is only ${(call.confidence * 100).toFixed(0)}% — not listing`,
+      `${call.rationale}. Listing would mean posting a $2.00 bond against a call I don't believe.`,
     );
     return null;
   }
@@ -253,11 +277,12 @@ export async function generateListing(asset = "ETH"): Promise<Listing | null> {
   const listing: Listing = {
     id: crypto.randomUUID(),
     asset,
-    direction: bps >= 0 ? "up" : "down",
-    confidence,
-    rationale: `5m momentum ${bps >= 0 ? "+" : ""}${bps.toFixed(2)}bps → continuation`,
+    direction: call.direction,
+    confidence: call.confidence,
+    rationale: call.rationale,
+    source,
     // Prices its own strategy off conviction — it asks for less when less sure.
-    askUsd: Number((0.25 + confidence * 0.35).toFixed(2)),
+    askUsd: Number((0.25 + call.confidence * 0.35).toFixed(2)),
     bondUsd: 2.0,
     createdAt: Date.now(),
     status: "listed",
@@ -268,7 +293,9 @@ export async function generateListing(asset = "ETH"): Promise<Listing | null> {
   say(
     "list",
     `Listed ${asset} ${listing.direction.toUpperCase()} at $${listing.askUsd.toFixed(2)}, backed by a $${listing.bondUsd.toFixed(2)} bond`,
-    `${listing.rationale} · conviction ${(confidence * 100).toFixed(0)}%. If I'm wrong, the buyer pays nothing and takes my bond.`,
+    source === "external"
+      ? `${listing.rationale} · conviction ${(call.confidence * 100).toFixed(0)}%. Derived from data just bought via Rain — reselling purchased insight.`
+      : `${listing.rationale} · conviction ${(call.confidence * 100).toFixed(0)}%. If I'm wrong, the buyer pays nothing and takes my bond.`,
   );
   return listing;
 }

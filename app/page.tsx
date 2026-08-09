@@ -1,6 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  OutcomeHistoryChart,
+  MarketShareDonut,
+  CHART_PINK,
+  CHART_LIME,
+  type OutcomePoint,
+  type ShareSlice,
+} from "./charts";
 
 type Strategy = {
   id: string;
@@ -78,11 +86,12 @@ type AgentListing = {
   bondUsd: number;
   createdAt: number;
   status: "draft" | "listed";
+  source: "momentum" | "external";
 };
 
 const SELLERS = [
-  { key: "a", name: "Intelligent", blurb: "Short-horizon momentum on majors. Sells capacity it can't deploy." },
-  { key: "b", name: "Random", blurb: "Claims a proprietary orderflow edge. The record disagrees." },
+  { key: "a", name: "Intelligent", blurb: "Short-horizon momentum on majors. Sells capacity it can't deploy.", color: CHART_PINK },
+  { key: "b", name: "Random", blurb: "Claims a proprietary orderflow edge. The record disagrees.", color: CHART_LIME },
 ];
 
 export default function Dashboard() {
@@ -97,6 +106,7 @@ export default function Dashboard() {
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [sidebarTab, setSidebarTab] = useState<"mandate" | "reasoning">("mandate");
   const timer = useRef<NodeJS.Timeout | null>(null);
   const agentTimer = useRef<NodeJS.Timeout | null>(null);
   const prefsDirty = useRef(false);
@@ -178,6 +188,10 @@ export default function Dashboard() {
       const j = await r.json();
       setLastAction(j.action ?? j.skipped ?? j.error ?? "cycle");
       if (j.error) setErr(j.error);
+      // Autonomous procures use the same Rain boundary card the manual "Buy
+      // data" button does — without this, a Rain purchase the agent made on
+      // its own timer is invisible there, the most natural place to look.
+      if (j.action === "procure" && j.result) setRain(j.result);
       await load();
     } catch (e) {
       setErr(String(e));
@@ -281,472 +295,614 @@ export default function Dashboard() {
   const rec = credit?.record;
   const pending = strategies.filter((s) => s.status === "pending");
 
+  // ── derived, real data for the two charts (no fabricated series) ────────
+  const resolvedChrono = strategies.filter((s) => s.status !== "pending").slice().reverse();
+  const outcomePoints: OutcomePoint[] = resolvedChrono.map((s, i) => ({
+    label: `#${i + 1} ${s.strategyName ?? s.seller}`,
+    authorizedUsd: s.authorizedMaxUsd ?? 0.5,
+    paidUsd: (s.authorizedMaxUsd ?? 0.5) * (s.accuracy ?? 0),
+  }));
+
+  const sellerStats = SELLERS.map((s) => {
+    const mine = strategies.filter((x) => x.seller === s.name && x.status !== "pending");
+    const paid = mine.filter((x) => (x.accuracy ?? 0) > 0);
+    const earned = mine.reduce((t, x) => t + (x.authorizedMaxUsd ?? 0.5) * (x.accuracy ?? 0), 0);
+    const hitRate = mine.length ? paid.length / mine.length : null;
+    return { ...s, sold: mine.length, hitRate, earned };
+  });
+  const shareSlices: ShareSlice[] = sellerStats.map((s) => ({
+    name: s.name,
+    valueUsd: s.earned,
+    color: s.color,
+  }));
+
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100 p-6 font-sans">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* ── header ─────────────────────────────────────────────── */}
-        <header className="border-b border-neutral-800 pb-5">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Agents pay for outcomes, not promises
-          </h1>
-          <p className="text-neutral-400 text-sm mt-1">
-            Conditional settlement on Monad via x402 <code className="text-neutral-300">upto</code>.
-            A wrong strategy settles at $0 — with no on-chain transaction.
-          </p>
-        </header>
-
-        {err && (
-          <div className="bg-red-950/60 border border-red-800 rounded-lg px-4 py-3 text-sm text-red-200">
-            {err}
-          </div>
-        )}
-
-        {/* ── mandate ───────────────────────────────────────────── */}
-        {prefs && (
-          <section className="bg-neutral-900 border border-emerald-900/70 rounded-xl p-5">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <h2 className="font-semibold text-sm">My Agent Mandate</h2>
-                <p className="text-xs text-neutral-500 mt-1 max-w-2xl leading-relaxed">
-                  The human sets these preferences once. After that, the agent buys,
-                  waits, procures external data, and lists strategies inside this mandate.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => saveMandate({ ...prefs, running: !prefs.running })}
-                  disabled={busy !== null || agentBusy}
-                  className={`text-sm px-3 py-1.5 rounded-lg disabled:opacity-40 ${
-                    prefs.running
-                      ? "border border-amber-800 text-amber-300 hover:bg-amber-950"
-                      : "bg-emerald-600 text-white hover:bg-emerald-500"
-                  }`}
-                >
-                  {agentBusy ? "Thinking…" : prefs.running ? "Pause agent" : "Start agent"}
-                </button>
-                <button
-                  onClick={() => saveMandate()}
-                  disabled={busy !== null}
-                  className="bg-neutral-100 text-neutral-900 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white disabled:opacity-40"
-                >
-                  {busy === "mandate" ? "saving…" : "Save mandate"}
-                </button>
-              </div>
-            </div>
-
-            <div className="grid md:grid-cols-5 gap-3 mt-4">
-              <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3">
-                <label className="text-[10px] uppercase text-neutral-600">Market focus</label>
-                <div className="flex gap-2 mt-2">
-                  {["ETH", "BTC", "SOL"].map((asset) => {
-                    const checked = prefs.assets[0] === asset;
-                    return (
-                      <button
-                        key={asset}
-                        onClick={() => chooseAsset(asset)}
-                        disabled={busy !== null}
-                        className={`text-xs px-2 py-1 rounded border ${
-                          checked
-                            ? "border-emerald-700 bg-emerald-950 text-emerald-300"
-                            : "border-neutral-800 text-neutral-500"
-                        }`}
-                      >
-                        {asset}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <MandateSlider
-                label="Max per strategy"
-                value={prefs.maxPerStrategy}
-                min={0.1}
-                max={2}
-                step={0.1}
-                format={(v) => `$${v.toFixed(2)}`}
-                onChange={(maxPerStrategy) => {
-                  prefsDirty.current = true;
-                  setPrefs({ ...prefs, maxPerStrategy });
-                }}
-              />
-              <MandateSlider
-                label="Strategy budget (you set)"
-                value={prefs.sessionBudget}
-                min={0.5}
-                max={10}
-                step={0.5}
-                format={(v) => `$${v.toFixed(2)}`}
-                onChange={(sessionBudget) => {
-                  prefsDirty.current = true;
-                  setPrefs({ ...prefs, sessionBudget });
-                }}
-              />
-              <MandateSlider
-                label="Min hit rate"
-                value={prefs.minSellerHitRate}
-                min={0}
-                max={1}
-                step={0.05}
-                format={(v) => `${Math.round(v * 100)}%`}
-                onChange={(minSellerHitRate) => {
-                  prefsDirty.current = true;
-                  setPrefs({ ...prefs, minSellerHitRate });
-                }}
-              />
-              <MandateSlider
-                label="Cycle"
-                value={prefs.intervalSec}
-                min={5}
-                max={60}
-                step={5}
-                format={(v) => `${v}s`}
-                onChange={(intervalSec) => {
-                  prefsDirty.current = true;
-                  setPrefs({ ...prefs, intervalSec });
-                }}
-              />
-            </div>
-            <div className="mt-4 flex items-center justify-between gap-3 border-t border-neutral-800 pt-3 text-xs text-neutral-500">
-              <span>
-                Status:{" "}
-                <span className={prefs.running ? "text-emerald-300" : "text-neutral-300"}>
-                  {prefs.running ? "running" : "paused"}
-                </span>
-                {lastAction && <> · last cycle: {lastAction}</>}
-              </span>
+    <div className="min-h-screen bg-canopy-bg text-canopy-ink font-sans flex">
+      {/* ── sidebar ─────────────────────────────────────────────────── */}
+      <aside className="w-72 shrink-0 border-r border-canopy-border p-5 flex flex-col gap-5 h-screen sticky top-0 overflow-y-auto">
+        <div>
+          <span className="text-[11px] font-bold uppercase tracking-wide text-canopy-muted">
+            Autonomous agent
+          </span>
+          {prefs && (
+            <div className="flex rounded-lg border border-canopy-border overflow-hidden text-xs font-semibold mt-2">
               <button
-                onClick={runAgentCycle}
+                onClick={() => prefs.running && saveMandate({ ...prefs, running: false })}
                 disabled={busy !== null || agentBusy}
-                className="border border-neutral-700 text-neutral-300 px-2 py-1 rounded hover:bg-neutral-800 disabled:opacity-40"
+                className={`flex-1 py-1.5 disabled:opacity-40 ${
+                  !prefs.running ? "bg-canopy-surface-2 text-canopy-ink" : "text-canopy-muted hover:text-canopy-ink"
+                }`}
               >
-                {agentBusy ? "running cycle…" : "Run one cycle"}
-              </button>
-            </div>
-          </section>
-        )}
-
-        {/* ── money strip ────────────────────────────────────────── */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="Max it could have paid" value={`$${(rec?.authorizedUsd ?? 0).toFixed(2)}`} />
-          <Stat label="Actually paid" value={`$${(rec?.spentUsd ?? 0).toFixed(2)}`} accent="text-emerald-400" />
-          <Stat
-            label="Never paid"
-            value={`$${(rec?.savedUsd ?? 0).toFixed(2)}`}
-            accent="text-amber-400"
-          />
-          <Stat
-            label="Card limit for outside data (earned)"
-            value={`$${credit?.limitUsd ?? "5.00"}`}
-            accent="text-sky-400"
-          />
-        </section>
-
-        {/* ── sellers ────────────────────────────────────────────── */}
-        <section className="grid md:grid-cols-2 gap-4">
-          {SELLERS.map((s) => {
-            const mine = strategies.filter((x) => x.seller === s.name && x.status !== "pending");
-            const paid = mine.filter((x) => (x.accuracy ?? 0) > 0);
-            const earned = mine.reduce(
-              (t, x) => t + (x.authorizedMaxUsd ?? 0.5) * (x.accuracy ?? 0),
-              0,
-            );
-            return (
-              <div key={s.key} className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-                <div className="flex justify-between items-start gap-3">
-                  <div>
-                    <h2 className="font-semibold">{s.name}</h2>
-                    <p className="text-xs text-neutral-500 mt-1 leading-relaxed">{s.blurb}</p>
-                  </div>
-                  <button
-                    onClick={() => buy(s.key)}
-                    disabled={busy !== null}
-                    className="shrink-0 bg-neutral-100 text-neutral-900 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white disabled:opacity-40"
-                  >
-                    {busy === `buy-${s.key}` ? "signing…" : "Buy strategy"}
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2 mt-4 text-sm">
-                  <Mini label="sold" value={String(mine.length)} />
-                  <Mini
-                    label="paid out"
-                    value={mine.length ? `${Math.round((paid.length / mine.length) * 100)}%` : "—"}
-                  />
-                  <Mini label="earned" value={`$${earned.toFixed(2)}`} />
-                </div>
-              </div>
-            );
-          })}
-        </section>
-
-        {/* ── agent activity ─────────────────────────────────────── */}
-        <section className="grid lg:grid-cols-2 gap-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-800 flex justify-between items-center">
-              <h2 className="font-semibold text-sm">Agent Activity</h2>
-              <span className="text-xs text-neutral-500">{agentLog.length} events</span>
-            </div>
-            {agentLog.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-neutral-600">
-                Start the agent or run one cycle to see its decisions.
-              </p>
-            ) : (
-              <ul className="divide-y divide-neutral-800">
-                {agentLog.slice(0, 8).map((entry) => (
-                  <li key={entry.id} className="px-5 py-3 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <span className="font-medium text-neutral-200">{entry.text}</span>
-                      <span className="text-[10px] uppercase text-neutral-600">{entry.act}</span>
-                    </div>
-                    {entry.detail && (
-                      <p className="text-xs text-neutral-500 mt-1 leading-relaxed">{entry.detail}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-neutral-800 flex justify-between items-center">
-              <h2 className="font-semibold text-sm">Strategies My Agent Listed</h2>
-              <span className="text-xs text-neutral-500">{agentListings.length} live</span>
-            </div>
-            {agentListings.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-neutral-600">
-                No sell-side strategy yet. The agent lists only when market-data conviction clears its bar.
-              </p>
-            ) : (
-              <ul className="divide-y divide-neutral-800">
-                {agentListings.slice(0, 6).map((listing) => (
-                  <li key={listing.id} className="px-5 py-3 text-sm flex justify-between gap-4">
-                    <div>
-                      <div className="font-medium">
-                        {listing.asset} {listing.direction === "up" ? "↑" : "↓"} · conf{" "}
-                        {listing.confidence}
-                      </div>
-                      <p className="text-xs text-neutral-500 mt-1">{listing.rationale}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-emerald-400 font-semibold">${listing.askUsd.toFixed(2)}</div>
-                      <div className="text-xs text-neutral-500">bond ${listing.bondUsd.toFixed(2)}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
-
-        {/* ── settlement feed ────────────────────────────────────── */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-neutral-800 flex justify-between items-center">
-            <h2 className="font-semibold text-sm">Settlements</h2>
-            <span className="text-xs text-neutral-500">
-              {pending.length} pending · polling every 2s
-            </span>
-          </div>
-
-          {strategies.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-neutral-600">
-              No purchases yet. Buy a strategy to start.
-            </p>
-          ) : (
-            <ul className="divide-y divide-neutral-800">
-              {strategies.map((s) => {
-                const left = Math.max(0, Math.ceil((s.resolvesAt - now) / 1000));
-                return (
-                  <li key={s.id} className="px-5 py-3 flex items-center gap-4 text-sm">
-                    <Badge status={s.status} />
-
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate">
-                        <span className="text-neutral-300">{s.strategyName ?? s.seller}</span>
-                        <span className="text-neutral-600"> · </span>
-                        <span className="font-medium">
-                          {s.asset} {s.direction === "up" ? "↑" : "↓"}
-                        </span>
-                        <span className="text-neutral-600">
-                          {" "}conf {s.confidence} · @ ${s.priceAtIssue?.toFixed(2)}
-                        </span>
-                      </div>
-                      {s.status === "zero" && (
-                        <div className="text-xs text-red-400 mt-0.5 font-medium">
-                          no on-chain transaction — nobody had to arbitrate this
-                        </div>
-                      )}
-                      {s.bond && (
-                        <div
-                          className={`text-xs mt-0.5 ${
-                            s.bond.status === "slashed"
-                              ? "text-red-400 font-medium"
-                              : "text-neutral-500"
-                          }`}
-                        >
-                          bond {s.bond.amount}{" "}
-                          {s.bond.status === "posted"
-                            ? "staked"
-                            : s.bond.status === "slashed"
-                              ? "— slashed, paid to buyer"
-                              : "— released"}
-                          {s.bond.txUrl && (
-                            <>
-                              {" "}
-                              ·{" "}
-                              <a
-                                href={s.bond.txUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sky-400 hover:underline"
-                              >
-                                tx ↗
-                              </a>
-                            </>
-                          )}
-                        </div>
-                      )}
-                      {s.txUrl && (
-                        <a
-                          href={s.txUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-sky-400 hover:underline mt-0.5 inline-block"
-                        >
-                          {s.txHash?.slice(0, 18)}… ↗
-                        </a>
-                      )}
-                    </div>
-
-                    <div className="text-right shrink-0 w-32">
-                      <div className="text-neutral-500 text-xs">
-                        max {s.authorizedMax}
-                        {s.pct && ` · ${s.pct}`}
-                      </div>
-                      <div
-                        className={
-                          s.status === "zero"
-                            ? "text-red-400 font-semibold"
-                            : s.status === "pending"
-                              ? "text-neutral-500"
-                              : "text-emerald-400 font-semibold"
-                        }
-                      >
-                        {s.status === "pending" ? `${left}s` : (s.settled ?? "—")}
-                      </div>
-                    </div>
-
-                    {s.status === "pending" && (
-                      <div className="flex gap-1 shrink-0">
-                        <button
-                          onClick={() => resolve(s.id)}
-                          disabled={busy !== null}
-                          className="text-xs border border-neutral-700 px-2 py-1 rounded hover:bg-neutral-800 disabled:opacity-40"
-                        >
-                          Resolve
-                        </button>
-                        <button
-                          onClick={() => resolve(s.id, 0)}
-                          disabled={busy !== null}
-                          className="text-xs border border-red-900 text-red-400 px-2 py-1 rounded hover:bg-red-950 disabled:opacity-40"
-                          title="Force the $0 path — demo control, not a fake market"
-                        >
-                          Force $0
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {/* ── Rain boundary ──────────────────────────────────────── */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-          <div className="flex justify-between items-start gap-4 flex-wrap">
-            <div>
-              <h2 className="font-semibold text-sm">Rain boundary — external purchase</h2>
-              <p className="text-xs text-neutral-500 mt-1 max-w-xl leading-relaxed">
-                Data no marketplace agent sells. The agent buys it with a scoped card sized to the
-                limit its track record earned. Rain enforces the cap, the merchant category, and
-                the expiry <em>before</em> money moves.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => rainBuy("5734", "Kaiko Market Data")}
-                disabled={busy !== null}
-                className="bg-emerald-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-emerald-500 disabled:opacity-40"
-              >
-                Buy data ($1.99)
+                Paused
               </button>
               <button
-                onClick={() => rainBuy("7995", "Offshore Casino")}
-                disabled={busy !== null}
-                className="border border-red-800 text-red-400 text-sm px-3 py-1.5 rounded-lg hover:bg-red-950 disabled:opacity-40"
+                onClick={() => !prefs.running && saveMandate({ ...prefs, running: true })}
+                disabled={busy !== null || agentBusy}
+                className={`flex-1 py-1.5 disabled:opacity-40 flex items-center justify-center gap-1.5 ${
+                  prefs.running ? "bg-canopy-lime-dim/50 text-canopy-lime" : "text-canopy-muted hover:text-canopy-ink"
+                }`}
               >
-                Try disallowed merchant
+                {prefs.running && <span className="w-1.5 h-1.5 rounded-full bg-canopy-lime animate-pulse" />}
+                {agentBusy ? "…" : "Running"}
               </button>
             </div>
-          </div>
-
-          {credit && (
-            <p className="text-xs text-neutral-500 mt-3 border-l-2 border-neutral-700 pl-3">
-              {credit.reason}
-            </p>
           )}
+        </div>
 
-          {rain && (
-            <div
-              className={`mt-4 rounded-lg border px-4 py-3 text-sm ${
-                rain.outcome === "declined"
-                  ? "bg-red-950/50 border-red-800"
-                  : rain.error
-                    ? "bg-amber-950/50 border-amber-800"
-                    : "bg-emerald-950/40 border-emerald-800"
+        <div className="flex rounded-lg border border-canopy-border overflow-hidden text-xs font-medium">
+          {(["mandate", "reasoning"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setSidebarTab(tab)}
+              className={`flex-1 py-1.5 capitalize ${
+                sidebarTab === tab
+                  ? "bg-canopy-surface-2 text-canopy-ink"
+                  : "text-canopy-muted hover:text-canopy-ink"
               }`}
             >
-              {rain.error ? (
-                <span className="text-amber-300">{rain.error}</span>
-              ) : rain.outcome === "declined" ? (
-                <>
-                  <div className="font-semibold text-red-300">
-                    DECLINED — {rain.reason}
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {!prefs ? (
+          <p className="text-xs text-canopy-muted">Loading mandate…</p>
+        ) : sidebarTab === "mandate" ? (
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="text-[10px] uppercase tracking-wide text-canopy-dim">Asset scope</label>
+              <div className="flex gap-1.5 mt-2">
+                {["SOL", "ETH", "BTC"].map((asset) => {
+                  const checked = prefs.assets[0] === asset;
+                  return (
+                    <button
+                      key={asset}
+                      onClick={() => chooseAsset(asset)}
+                      disabled={busy !== null}
+                      className={`flex-1 text-xs px-2 py-1.5 rounded border font-medium ${
+                        checked
+                          ? "border-canopy-lime bg-canopy-lime-dim/40 text-canopy-lime"
+                          : "border-canopy-border text-canopy-muted"
+                      }`}
+                    >
+                      {asset}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <MandateSlider
+              label="Per-strategy ceiling"
+              value={prefs.maxPerStrategy}
+              min={0.1}
+              max={2}
+              step={0.1}
+              format={(v) => `$${v.toFixed(2)}`}
+              onChange={(maxPerStrategy) => {
+                prefsDirty.current = true;
+                setPrefs({ ...prefs, maxPerStrategy });
+              }}
+            />
+            <MandateSlider
+              label="Session budget"
+              value={prefs.sessionBudget}
+              min={0.5}
+              max={10}
+              step={0.5}
+              format={(v) => `$${v.toFixed(2)}`}
+              onChange={(sessionBudget) => {
+                prefsDirty.current = true;
+                setPrefs({ ...prefs, sessionBudget });
+              }}
+            />
+            <MandateSlider
+              label="Min seller hit rate"
+              value={prefs.minSellerHitRate}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(minSellerHitRate) => {
+                prefsDirty.current = true;
+                setPrefs({ ...prefs, minSellerHitRate });
+              }}
+            />
+            <MandateSlider
+              label="Cycle interval"
+              value={prefs.intervalSec}
+              min={5}
+              max={60}
+              step={5}
+              format={(v) => `${v}s`}
+              onChange={(intervalSec) => {
+                prefsDirty.current = true;
+                setPrefs({ ...prefs, intervalSec });
+              }}
+            />
+
+            <button
+              onClick={() => saveMandate()}
+              disabled={busy !== null}
+              className="bg-canopy-pink text-white text-sm font-medium py-2 rounded-lg hover:opacity-90 disabled:opacity-40"
+            >
+              {busy === "mandate" ? "Saving…" : "Save mandate"}
+            </button>
+            <button
+              onClick={runAgentCycle}
+              disabled={busy !== null || agentBusy}
+              className="border border-canopy-border text-canopy-muted text-xs py-1.5 rounded-lg hover:text-canopy-ink disabled:opacity-40"
+            >
+              {agentBusy ? "Running cycle…" : "Run one cycle"}
+            </button>
+            <p className="text-[11px] text-canopy-dim leading-relaxed">
+              Status: <span className={prefs.running ? "text-canopy-lime" : "text-canopy-muted"}>
+                {prefs.running ? "running" : "paused"}
+              </span>
+              {lastAction && <> · last cycle: {lastAction}</>}
+            </p>
+          </div>
+        ) : (
+          <ul className="flex-1 overflow-y-auto space-y-3 text-xs">
+            {agentLog.length === 0 ? (
+              <p className="text-canopy-muted">Start the agent or run one cycle to see its reasoning.</p>
+            ) : (
+              agentLog.map((entry) => (
+                <li key={entry.id} className="border-l-2 border-canopy-border pl-2.5">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-canopy-ink font-medium">{entry.text}</span>
                   </div>
-                  <div className="text-xs text-neutral-400 mt-1">
-                    {rain.merchant} (MCC {rain.mcc}) · attempted ${rain.attemptedUsd} · card ••{rain.card?.last4}
-                    <br />
-                    Rain enforced the policy before any money moved.
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="font-semibold text-emerald-300">
-                    {String(rain.outcome).toUpperCase()} — ${rain.amountUsd} at {rain.merchant}
-                  </div>
-                  <div className="text-xs text-neutral-400 mt-1">
-                    card ••{rain.card?.last4} · limit ${rain.policy?.limitUsd} (Rain ceiling $
-                    {rain.policy?.rainCeilingUsd}) · MCCs {rain.policy?.allowedMccs?.join(", ")}
-                  </div>
-                </>
-              )}
+                  <span className="text-[9px] uppercase text-canopy-dim">{entry.act}</span>
+                  {entry.detail && <p className="text-canopy-muted mt-0.5 leading-relaxed">{entry.detail}</p>}
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+      </aside>
+
+      {/* ── main ────────────────────────────────────────────────────── */}
+      <main className="flex-1 min-w-0 p-6">
+        <div className="max-w-6xl mx-auto space-y-5">
+          {/* ── header ──────────────────────────────────────────────── */}
+          <header className="flex items-start justify-between gap-4 flex-wrap pb-4 border-b border-canopy-border">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-canopy-pink" style={{ fontStyle: "italic" }}>
+                Canopy
+              </h1>
+              <p className="text-sm font-medium text-canopy-ink mt-1">Agents pay for outcomes, not promises</p>
+              <p className="text-xs text-canopy-muted mt-0.5">
+                Conditional settlement on Monad via x402 <code>upto</code> — active on-chain.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 bg-canopy-surface border border-canopy-border rounded-full px-3 py-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${prefs?.running ? "bg-canopy-lime" : "bg-canopy-dim"}`} />
+              <span className="text-[10px] uppercase tracking-wide text-canopy-muted">
+                {prefs?.running ? "Active agent" : "Idle"}
+              </span>
+            </div>
+          </header>
+
+          {err && (
+            <div className="bg-red-950/60 border border-red-800 rounded-lg px-4 py-3 text-sm text-red-200">
+              {err}
             </div>
           )}
-        </section>
 
-        <footer className="text-xs text-neutral-600 pb-8">
-          Monad testnet · eip155:10143 · USDC 0x534b…43A3 · facilitator x402-facilitator.molandak.org
-        </footer>
-      </div>
-    </main>
+          {/* ── money strip ─────────────────────────────────────────── */}
+          <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Stat label="Authorized ceilings" value={`$${(rec?.authorizedUsd ?? 0).toFixed(2)}`} />
+            <Stat
+              label="Actually paid out"
+              value={`$${(rec?.spentUsd ?? 0).toFixed(2)}`}
+              sub={rec && rec.authorizedUsd > 0 ? `${((rec.spentUsd / rec.authorizedUsd) * 100).toFixed(1)}%` : undefined}
+              accent="text-canopy-lime"
+            />
+            <Stat
+              label="Saved by settlement"
+              value={`$${(rec?.savedUsd ?? 0).toFixed(2)}`}
+              accent="text-amber-400"
+            />
+            <Stat
+              label="Spending limit (earned)"
+              value={`$${credit?.limitUsd ?? "5.00"}`}
+              accent="text-canopy-pink"
+            />
+          </section>
+
+          {/* ── charts ──────────────────────────────────────────────── */}
+          <section className="grid lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 bg-canopy-surface border border-canopy-border rounded-xl p-5">
+              <h2 className="font-semibold text-sm mb-3">Outcome History</h2>
+              <OutcomeHistoryChart points={outcomePoints} />
+            </div>
+            <div className="bg-canopy-surface border border-canopy-border rounded-xl p-5">
+              <h2 className="font-semibold text-sm mb-3">Market Share</h2>
+              <MarketShareDonut slices={shareSlices} />
+            </div>
+          </section>
+
+          {/* ── sellers ─────────────────────────────────────────────── */}
+          <section className="grid md:grid-cols-2 gap-4">
+            {sellerStats.map((s) => (
+              <div key={s.key} className="bg-canopy-surface border border-canopy-border rounded-xl p-5">
+                <div className="flex justify-between items-start gap-3">
+                  <div>
+                    <h2 className="font-semibold flex items-center gap-2">
+                      {s.name}
+                      {s.hitRate !== null && (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            s.hitRate >= 0.5
+                              ? "bg-canopy-lime-dim/50 text-canopy-lime"
+                              : "bg-red-950 text-red-300"
+                          }`}
+                        >
+                          {(s.hitRate * 100).toFixed(0)}% HIT RATE
+                        </span>
+                      )}
+                    </h2>
+                    <p className="text-xs text-canopy-muted mt-1 leading-relaxed">{s.blurb}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-4 text-sm">
+                  <Mini label="strategies sold" value={String(s.sold)} />
+                  <Mini label="paid out" value={s.hitRate !== null ? `${Math.round(s.hitRate * 100)}%` : "—"} />
+                  <Mini label="total earned" value={`$${s.earned.toFixed(2)}`} />
+                </div>
+                <button
+                  onClick={() => buy(s.key)}
+                  disabled={busy !== null}
+                  className="w-full mt-4 bg-canopy-pink text-white text-sm font-semibold py-2 rounded-lg hover:opacity-90 disabled:opacity-40"
+                >
+                  {busy === `buy-${s.key}` ? "Signing…" : "Buy strategy"}
+                </button>
+              </div>
+            ))}
+          </section>
+
+          {/* ── settlement feed ─────────────────────────────────────── */}
+          <section className="bg-canopy-surface border border-canopy-border rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-canopy-border flex justify-between items-center">
+              <h2 className="font-semibold text-sm">Settlement Feed</h2>
+              <span className="text-xs text-canopy-muted">
+                {pending.length} pending · real-time outcomes
+              </span>
+            </div>
+
+            {strategies.length === 0 ? (
+              <p className="px-5 py-10 text-center text-sm text-canopy-muted">
+                No purchases yet. Buy a strategy to start.
+              </p>
+            ) : (
+              <ul className="divide-y divide-canopy-border max-h-96 overflow-y-auto">
+                {strategies.map((s) => {
+                  const left = Math.max(0, Math.ceil((s.resolvesAt - now) / 1000));
+                  return (
+                    <li key={s.id} className="px-5 py-3 flex items-center gap-4 text-sm">
+                      <Badge status={s.status} />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">
+                          <span className="text-canopy-ink">{s.strategyName ?? s.seller}</span>
+                          <span className="text-canopy-dim"> · </span>
+                          <span className="font-medium">
+                            {s.asset} {s.direction === "up" ? "↑" : "↓"}
+                          </span>
+                          <span className="text-canopy-dim">
+                            {" "}conf {s.confidence} · @ ${s.priceAtIssue?.toFixed(2)}
+                          </span>
+                        </div>
+                        {s.status === "zero" && (
+                          <div className="text-xs text-red-400 mt-0.5 font-medium">
+                            no on-chain transaction — nobody had to arbitrate this
+                          </div>
+                        )}
+                        {s.bond && (
+                          <div
+                            className={`text-xs mt-0.5 ${
+                              s.bond.status === "slashed" ? "text-red-400 font-medium" : "text-canopy-muted"
+                            }`}
+                          >
+                            bond {s.bond.amount}{" "}
+                            {s.bond.status === "posted"
+                              ? "staked"
+                              : s.bond.status === "slashed"
+                                ? "— slashed, paid to buyer"
+                                : "— released"}
+                            {s.bond.txUrl && (
+                              <>
+                                {" "}
+                                ·{" "}
+                                <a href={s.bond.txUrl} target="_blank" rel="noreferrer" className="text-canopy-lime hover:underline">
+                                  tx ↗
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {s.txUrl && (
+                          <a
+                            href={s.txUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-canopy-lime hover:underline mt-0.5 inline-block"
+                          >
+                            {s.txHash?.slice(0, 18)}… ↗
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="text-right shrink-0 w-32">
+                        <div className="text-canopy-muted text-xs">
+                          max {s.authorizedMax}
+                          {s.pct && ` · ${s.pct}`}
+                        </div>
+                        <div
+                          className={
+                            s.status === "zero"
+                              ? "text-red-400 font-semibold"
+                              : s.status === "pending"
+                                ? "text-canopy-muted"
+                                : "text-canopy-lime font-semibold"
+                          }
+                        >
+                          {s.status === "pending" ? `${left}s` : (s.settled ?? "—")}
+                        </div>
+                      </div>
+
+                      {s.status === "pending" && (
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            onClick={() => resolve(s.id)}
+                            disabled={busy !== null}
+                            className="text-xs border border-canopy-border px-2 py-1 rounded hover:bg-canopy-surface-2 disabled:opacity-40"
+                          >
+                            Resolve
+                          </button>
+                          <button
+                            onClick={() => resolve(s.id, 0)}
+                            disabled={busy !== null}
+                            className="text-xs border border-red-900 text-red-400 px-2 py-1 rounded hover:bg-red-950 disabled:opacity-40"
+                            title="Force the $0 path — demo control, not a fake market"
+                          >
+                            Force $0
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          {/* ── agent activity + listings ───────────────────────────── */}
+          <section className="grid lg:grid-cols-2 gap-4">
+            <div className="bg-canopy-surface border border-canopy-border rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-canopy-border flex justify-between items-center">
+                <h2 className="font-semibold text-sm">Agent Activity</h2>
+                <span className="text-xs text-canopy-muted">{agentLog.length} events</span>
+              </div>
+              {agentLog.length === 0 ? (
+                <p className="px-5 py-8 text-sm text-canopy-muted">
+                  Start the agent or run one cycle to see its decisions.
+                </p>
+              ) : (
+                <ul className="divide-y divide-canopy-border max-h-96 overflow-y-auto">
+                  {agentLog.map((entry) => (
+                    <li key={entry.id} className="px-5 py-3 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <span className="font-medium text-canopy-ink">{entry.text}</span>
+                        <span className="text-[10px] uppercase text-canopy-dim">{entry.act}</span>
+                      </div>
+                      {entry.detail && (
+                        <p className="text-xs text-canopy-muted mt-1 leading-relaxed">{entry.detail}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="bg-canopy-surface border border-canopy-border rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-canopy-border flex justify-between items-center">
+                <h2 className="font-semibold text-sm">Strategies My Agent Listed</h2>
+                <span className="text-xs text-canopy-muted">{agentListings.length} live</span>
+              </div>
+              {agentListings.length === 0 ? (
+                <p className="px-5 py-8 text-sm text-canopy-muted">
+                  No sell-side strategy yet. The agent lists only when market-data conviction clears its bar.
+                </p>
+              ) : (
+                <ul className="divide-y divide-canopy-border max-h-96 overflow-y-auto">
+                  {agentListings.map((listing) => (
+                    <li key={listing.id} className="px-5 py-3 text-sm flex justify-between gap-4">
+                      <div>
+                        <div className="font-medium flex items-center gap-2">
+                          {listing.asset} {listing.direction === "up" ? "↑" : "↓"} · conf{" "}
+                          {listing.confidence}
+                          {listing.source === "external" && (
+                            <span
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-canopy-pink-dim/50 text-canopy-pink"
+                              title="Derived from data bought via the Rain boundary, not the marketplace's own feed"
+                            >
+                              FROM PURCHASED DATA
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-canopy-muted mt-1">{listing.rationale}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-canopy-lime font-semibold">${listing.askUsd.toFixed(2)}</div>
+                        <div className="text-xs text-canopy-muted">bond ${listing.bondUsd.toFixed(2)}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          {/* ── Rain boundary ───────────────────────────────────────── */}
+          <section className="bg-canopy-surface border border-canopy-border rounded-xl p-5">
+            <div className="grid lg:grid-cols-2 gap-5">
+              <div>
+                <h2 className="font-semibold text-sm">The Boundary — external data gateway</h2>
+                <p className="text-xs text-canopy-muted mt-1 leading-relaxed">
+                  Data no marketplace agent sells. The agent buys it with a scoped card sized to the
+                  limit its track record earned. Rain enforces the cap, the merchant category, and
+                  the expiry <em>before</em> money moves.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => rainBuy("5734", "Kaiko Market Data")}
+                    disabled={busy !== null}
+                    className="bg-canopy-pink text-white text-sm px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-40"
+                  >
+                    Buy data ($1.99)
+                  </button>
+                  <button
+                    onClick={() => rainBuy("7995", "Offshore Casino")}
+                    disabled={busy !== null}
+                    className="border border-red-800 text-red-400 text-sm px-3 py-1.5 rounded-lg hover:bg-red-950 disabled:opacity-40"
+                  >
+                    Try disallowed merchant
+                  </button>
+                </div>
+
+                {credit && (
+                  <div className="mt-3 rounded-lg border border-sky-900/60 bg-sky-950/30 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-sky-400">
+                      Credit status
+                    </div>
+                    <p className="text-sm text-canopy-ink/90 mt-1 leading-relaxed">{credit.reason}</p>
+                  </div>
+                )}
+
+                {rain && (
+                  <div
+                    className={`mt-3 rounded-lg border px-4 py-3 text-sm ${
+                      rain.outcome === "declined"
+                        ? "bg-red-950/50 border-red-800"
+                        : rain.error
+                          ? "bg-amber-950/50 border-amber-800"
+                          : "bg-canopy-lime-dim/30 border-canopy-lime/40"
+                    }`}
+                  >
+                    {rain.error ? (
+                      <span className="text-amber-300">{rain.error}</span>
+                    ) : rain.outcome === "declined" ? (
+                      <>
+                        <div className="font-semibold text-red-300">DECLINED — {rain.reason}</div>
+                        <div className="text-xs text-canopy-muted mt-1">
+                          {rain.merchant} (MCC {rain.mcc}) · attempted ${rain.attemptedUsd} · card ••{rain.card?.last4}
+                          <br />
+                          Rain enforced the policy before any money moved.
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-semibold text-canopy-lime">
+                          {String(rain.outcome).toUpperCase()} — ${rain.amountUsd} at {rain.merchant}
+                        </div>
+                        <div className="text-xs text-canopy-muted mt-1">
+                          card ••{rain.card?.last4} · limit ${rain.policy?.limitUsd} (Rain ceiling $
+                          {rain.policy?.rainCeilingUsd}) · MCCs {rain.policy?.allowedMccs?.join(", ")}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <AgentCard rain={rain} credit={credit} />
+            </div>
+          </section>
+
+          <footer className="text-xs text-canopy-dim pb-8 flex justify-between flex-wrap gap-2">
+            <span>
+              Network: Monad testnet · eip155:10143 · USDC 0x534b…43A3 · facilitator
+              x402-facilitator.molandak.org
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-canopy-lime" /> healthy
+            </span>
+          </footer>
+        </div>
+      </main>
+    </div>
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+
+function AgentCard({ rain, credit }: { rain: RainResult | null; credit: Credit | null }) {
+  const last4 = rain?.card?.last4;
+  const status = rain?.error ? "Error" : rain?.outcome === "declined" ? "Declined" : rain ? "Authorized" : "No card issued yet";
+  const statusColor =
+    status === "Authorized" ? "text-canopy-lime" : status === "Declined" ? "text-red-400" : "text-canopy-muted";
+
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3">
-      <div className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</div>
-      <div className={`text-xl font-semibold mt-1 ${accent ?? ""}`}>{value}</div>
+    <div className="flex flex-col justify-between rounded-xl border border-canopy-border bg-gradient-to-br from-canopy-surface-2 to-canopy-bg p-5 min-h-[180px]">
+      <div className="flex justify-between items-start">
+        <div>
+          <span className="text-[10px] uppercase tracking-widest text-canopy-dim">Canopy agent card</span>
+          <p className="text-[10px] text-canopy-dim mt-0.5 max-w-[220px] leading-relaxed">
+            Rain issues one of these per external purchase, scoped to the agent's
+            earned limit. Shows whichever was issued most recently.
+          </p>
+        </div>
+        <span className="text-canopy-pink text-xs shrink-0">◆</span>
+      </div>
+      <div className={`font-mono text-lg tracking-widest my-3 ${last4 ? "text-canopy-ink/90" : "text-canopy-dim"}`}>
+        •••• •••• •••• {last4 ?? "----"}
+      </div>
+      <div className="flex justify-between items-end text-[10px]">
+        <div>
+          <div className="uppercase text-canopy-dim">Autonomous holder</div>
+          <div className="text-canopy-ink font-medium">CANOPY AGENT</div>
+        </div>
+        <div className="text-right">
+          <div className="uppercase text-canopy-dim">Status</div>
+          <div className={`font-medium ${statusColor}`}>{status}</div>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-canopy-border/70 text-[11px] text-canopy-muted flex justify-between">
+        <span>Next card's limit</span>
+        <span className="text-canopy-ink">${credit?.limitUsd ?? "5.00"}</span>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div className="bg-canopy-surface border border-canopy-border rounded-xl px-4 py-3">
+      <div className="text-[11px] uppercase tracking-wide text-canopy-muted">{label}</div>
+      <div className="flex items-baseline gap-1.5 mt-1">
+        <span className={`text-xl font-semibold ${accent ?? ""}`}>{value}</span>
+        {sub && <span className="text-xs text-canopy-dim">{sub}</span>}
+      </div>
     </div>
   );
 }
@@ -769,13 +925,13 @@ function MandateSlider({
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3">
+    <div>
       <div className="flex justify-between gap-2">
-        <label className="text-[10px] uppercase text-neutral-600">{label}</label>
-        <span className="text-xs text-neutral-300">{format(value)}</span>
+        <label className="text-[10px] uppercase tracking-wide text-canopy-dim">{label}</label>
+        <span className="text-xs text-canopy-ink">{format(value)}</span>
       </div>
       <input
-        className="w-full mt-3 accent-emerald-500"
+        className="w-full mt-2 accent-[var(--color-canopy-pink)]"
         type="range"
         min={min}
         max={max}
@@ -789,8 +945,8 @@ function MandateSlider({
 
 function Mini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1.5">
-      <div className="text-[10px] uppercase text-neutral-600">{label}</div>
+    <div className="bg-canopy-surface-2 border border-canopy-border rounded-lg px-2 py-1.5">
+      <div className="text-[10px] uppercase text-canopy-dim">{label}</div>
       <div className="font-medium">{value}</div>
     </div>
   );
@@ -798,8 +954,8 @@ function Mini({ label, value }: { label: string; value: string }) {
 
 function Badge({ status }: { status: Strategy["status"] }) {
   const map = {
-    pending: ["PENDING", "bg-neutral-800 text-neutral-400"],
-    full: ["FULL", "bg-emerald-900 text-emerald-300"],
+    pending: ["PENDING", "bg-canopy-surface-2 text-canopy-muted"],
+    full: ["FULL", "bg-canopy-lime-dim/50 text-canopy-lime"],
     partial: ["PARTIAL", "bg-amber-900 text-amber-300"],
     zero: ["ZERO", "bg-red-900 text-red-300"],
   } as const;

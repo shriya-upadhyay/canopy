@@ -47,6 +47,10 @@ export type Pending = {
     txHash?: string;      // absent when released -> no on-chain tx
     at: number;
   };
+  /** Set when resolveBond throws. Bond creation is currently disabled (see
+   *  app/api/strategy/route.ts), so this only matters for signals already in
+   *  memory from before that change. */
+  bondError?: string;
 };
 
 const store = new Map<string, Pending>();
@@ -68,5 +72,13 @@ export const markSettled = (id: string, s: Pending["settled"]) => {
 
 export const markBondSettled = (id: string, s: Pending["bondSettled"]) => {
   const p = store.get(id);
-  if (p) p.bondSettled = s;
+  if (p) {
+    p.bondSettled = s;
+    p.bondError = undefined;
+  }
+};
+
+export const markBondError = (id: string, message: string) => {
+  const p = store.get(id);
+  if (p) p.bondError = message;
 };
